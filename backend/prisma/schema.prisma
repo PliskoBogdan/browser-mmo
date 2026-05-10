@@ -1,0 +1,113 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider     = "prisma-client"
+  output       = "./generated/client"
+  moduleFormat = "cjs"
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
+  username String @unique
+
+  level Int @default(1)
+  exp   Int @default(0)
+  gold  Int @default(0)
+
+  hp    Int @default(100)
+  maxHp Int @default(100)
+
+  isDead Boolean @default(false)
+
+  weaponId Int?
+  weapon   Weapon? @relation(fields: [weaponId], references: [id])
+
+  activeBattle Battle?
+
+  createdAt DateTime @default(now())
+}
+
+model Weapon {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  damage      Int
+  attackSpeed Float
+
+  users User[]
+}
+
+model Location {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  minLevel    Int     @default(1)
+
+  subLocations SubLocation[]
+}
+
+model SubLocation {
+  id          Int     @id @default(autoincrement())
+  locationId  Int
+  location    Location @relation(fields: [locationId], references: [id])
+  name        String
+  description String?
+  isSafe      Boolean @default(false)
+  minLevel    Int     @default(1)
+
+  monsters SubLocationMonster[]
+  battles  Battle[]
+}
+
+model Monster {
+  id          Int    @id @default(autoincrement())
+  name        String
+  maxHp       Int
+  damage      Int
+  attackSpeed Float
+  expReward   Int
+  goldReward  Int
+
+  subLocations SubLocationMonster[]
+  battles      Battle[]
+}
+
+model SubLocationMonster {
+  subLocationId Int
+  monsterId     Int
+  spawnWeight   Int @default(100)
+
+  subLocation SubLocation @relation(fields: [subLocationId], references: [id])
+  monster     Monster     @relation(fields: [monsterId], references: [id])
+
+  @@id([subLocationId, monsterId])
+}
+
+model Battle {
+  id            Int         @id @default(autoincrement())
+  userId        Int         @unique
+  user          User        @relation(fields: [userId], references: [id])
+  monsterId     Int
+  monster       Monster     @relation(fields: [monsterId], references: [id])
+  subLocationId Int
+  subLocation   SubLocation @relation(fields: [subLocationId], references: [id])
+
+  monsterCurrentHp    Int
+  lastPlayerAttackAt  DateTime?
+  lastMonsterAttackAt DateTime  @default(now())
+
+  status BattleStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BattleStatus {
+  ACTIVE
+  WON
+  LOST
+  FLED
+}

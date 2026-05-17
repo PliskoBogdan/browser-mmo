@@ -29,3 +29,6 @@ Thumbs.db
 
 # TypeScript incremental compilation cache
 *.tsbuildinfo
+
+#Frontend
+frontend/.nuxt/

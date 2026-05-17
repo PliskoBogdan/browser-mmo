@@ -1,23 +1,31 @@
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(null);
+  const isAuthenticated = ref(false);
+  const initialized = ref(false);
 
-  const isAuthenticated = computed(() => !!token.value);
-
-  function init() {
-    if (import.meta.client) {
-      token.value = localStorage.getItem('auth_token');
+  async function init(headers?: Record<string, string>) {
+    if (initialized.value) return;
+    const config = useRuntimeConfig();
+    try {
+      await $fetch(`${config.public.apiBase}/auth/me`, {
+        credentials: 'include',
+        headers: headers ?? {},
+      });
+      isAuthenticated.value = true;
+    } catch {
+      isAuthenticated.value = false;
     }
+    initialized.value = true;
   }
 
-  function setToken(t: string) {
-    token.value = t;
-    if (import.meta.client) localStorage.setItem('auth_token', t);
+  async function logout() {
+    const config = useRuntimeConfig();
+    await $fetch(`${config.public.apiBase}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    isAuthenticated.value = false;
+    initialized.value = false;
   }
 
-  function logout() {
-    token.value = null;
-    if (import.meta.client) localStorage.removeItem('auth_token');
-  }
-
-  return { token, isAuthenticated, init, setToken, logout };
+  return { isAuthenticated, initialized, init, logout };
 });

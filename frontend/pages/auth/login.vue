@@ -64,11 +64,13 @@ async function handleLogin() {
   errorMsg.value = '';
   loading.value = true;
   try {
-    const data = await $fetch<{ access_token: string }>(`${config.public.apiBase}/auth/login`, {
+    await $fetch(`${config.public.apiBase}/auth/login`, {
       method: 'POST',
       body: form,
+      credentials: 'include',
     });
-    authStore.setToken(data.access_token);
+    authStore.isAuthenticated = true;
+    authStore.initialized = true;
     await navigateTo('/world');
   } catch (e: any) {
     errorMsg.value = e?.data?.message ?? 'Invalid credentials';

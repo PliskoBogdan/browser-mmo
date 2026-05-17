@@ -14,7 +14,7 @@ export class AuthService {
     private prisma: PrismaService,
   ) {}
 
-  async register(email: string, username: string, password: string) {
+  async register(email: string, username: string, password: string): Promise<string> {
     const hash = await bcrypt.hash(password, 10);
 
     // Находим стартовое оружие (Pistol должен быть в БД после seed)
@@ -32,7 +32,7 @@ export class AuthService {
     return this.signToken(user.id);
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string): Promise<string> {
     const user = await this.users.findByEmail(email);
     if (!user) throw new UnauthorizedException();
 
@@ -42,9 +42,7 @@ export class AuthService {
     return this.signToken(user.id);
   }
 
-  private signToken(userId: number) {
-    return {
-      access_token: this.jwt.sign({ sub: userId }),
-    };
+  private signToken(userId: number): string {
+    return this.jwt.sign({ sub: userId });
   }
 }

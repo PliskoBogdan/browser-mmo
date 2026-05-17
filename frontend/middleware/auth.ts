@@ -1,6 +1,7 @@
-export default defineNuxtRouteMiddleware((to) => {
+export default defineNuxtRouteMiddleware(async (to) => {
   const authStore = useAuthStore();
-  authStore.init();
+  const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined;
+  await authStore.init(headers);
 
   if (!authStore.isAuthenticated && !to.path.startsWith('/auth')) {
     return navigateTo('/auth/login');

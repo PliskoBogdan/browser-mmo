@@ -69,11 +69,13 @@ async function handleRegister() {
   errorMsg.value = '';
   loading.value = true;
   try {
-    const data = await $fetch<{ access_token: string }>(`${config.public.apiBase}/auth/register`, {
+    await $fetch(`${config.public.apiBase}/auth/register`, {
       method: 'POST',
       body: form,
+      credentials: 'include',
     });
-    authStore.setToken(data.access_token);
+    authStore.isAuthenticated = true;
+    authStore.initialized = true;
     await navigateTo('/world');
   } catch (e: any) {
     errorMsg.value = e?.data?.message ?? 'Registration failed';

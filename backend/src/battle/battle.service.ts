@@ -62,8 +62,8 @@ export class BattleService {
     }
 
     // Если уже есть активный бой — вернуть текущее состояние
-    const existingBattle = await this.prisma.battle.findUnique({
-      where: { userId },
+    const existingBattle = await this.prisma.battle.findFirst({
+      where: { userId, status: BattleStatus.ACTIVE },
       include: { monster: true },
     });
 
@@ -122,8 +122,8 @@ export class BattleService {
 
   async attack(userId: number): Promise<AttackResultDto> {
     const [battle, user] = await Promise.all([
-      this.prisma.battle.findUnique({
-        where: { userId },
+      this.prisma.battle.findFirst({
+        where: { userId, status: BattleStatus.ACTIVE },
         include: { monster: true },
       }),
       this.prisma.user.findUnique({
@@ -207,15 +207,7 @@ export class BattleService {
         // Рассчитываем финальное HP с учётом смерти игрока
         const finalHp = playerDied ? 0 : playerCurrentHp;
 
-        await tx.battle.update({
-          where: { id: battle.id },
-          data: {
-            monsterCurrentHp: 0,
-            lastPlayerAttackAt: now,
-            lastMonsterAttackAt: newLastMonsterAttackAt,
-            status: BattleStatus.WON,
-          },
-        });
+        await tx.battle.delete({ where: { id: battle.id } });
 
         await tx.user.update({
           where: { id: userId },
@@ -230,15 +222,7 @@ export class BattleService {
 
         if (playerDied) playerCurrentHp = 0;
       } else if (playerDied) {
-        await tx.battle.update({
-          where: { id: battle.id },
-          data: {
-            lastPlayerAttackAt: now,
-            lastMonsterAttackAt: newLastMonsterAttackAt,
-            monsterCurrentHp: newMonsterHp,
-            status: BattleStatus.LOST,
-          },
-        });
+        await tx.battle.delete({ where: { id: battle.id } });
 
         await tx.user.update({
           where: { id: userId },
@@ -286,7 +270,9 @@ export class BattleService {
   }
 
   async flee(userId: number) {
-    const battle = await this.prisma.battle.findUnique({ where: { userId } });
+    const battle = await this.prisma.battle.findFirst({
+      where: { userId, status: BattleStatus.ACTIVE },
+    });
 
     if (!battle || battle.status !== BattleStatus.ACTIVE) {
       throw new BadRequestException('You are not in an active battle.');
@@ -300,10 +286,7 @@ export class BattleService {
     const newHp = Math.max(1, user.hp - fleePenalty);
 
     await this.prisma.$transaction([
-      this.prisma.battle.update({
-        where: { id: battle.id },
-        data: { status: BattleStatus.FLED },
-      }),
+      this.prisma.battle.delete({ where: { id: battle.id } }),
       this.prisma.user.update({
         where: { id: userId },
         data: { hp: newHp },
@@ -318,8 +301,8 @@ export class BattleService {
   }
 
   async getCurrentBattle(userId: number) {
-    const battle = await this.prisma.battle.findUnique({
-      where: { userId },
+    const battle = await this.prisma.battle.findFirst({
+      where: { userId, status: BattleStatus.ACTIVE },
       include: {
         monster: true,
         subLocation: { include: { location: true } },

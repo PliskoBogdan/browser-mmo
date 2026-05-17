@@ -26,7 +26,7 @@ model User {
   weaponId Int?
   weapon   Weapon? @relation(fields: [weaponId], references: [id])
 
-  activeBattle Battle?
+  battles Battle[]
 
   createdAt DateTime @default(now())
 }
@@ -88,7 +88,7 @@ model SubLocationMonster {
 
 model Battle {
   id            Int         @id @default(autoincrement())
-  userId        Int         @unique
+  userId        Int
   user          User        @relation(fields: [userId], references: [id])
   monsterId     Int
   monster       Monster     @relation(fields: [monsterId], references: [id])
@@ -103,6 +103,8 @@ model Battle {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 enum BattleStatus {

@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseIntPipe,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { BattleService } from './battle.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from 'express';
@@ -24,10 +14,7 @@ export class BattleController {
 
   @Post('enter/:subLocationId')
   @HttpCode(HttpStatus.OK)
-  enter(
-    @Req() req: AuthenticatedRequest,
-    @Param('subLocationId', ParseIntPipe) subLocationId: number,
-  ) {
+  enter(@Req() req: AuthenticatedRequest, @Param('subLocationId', ParseIntPipe) subLocationId: number) {
     return this.battleService.enterSubLocation(req.user.userId, subLocationId);
   }
 

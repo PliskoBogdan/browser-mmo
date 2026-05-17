@@ -10,20 +10,20 @@ async function main() {
   // --- Weapons ---
   const pistol = await prisma.weapon.upsert({
     where: { name: 'Pistol' },
-    update: {},
+    update: { attackSpeed: 1.5 },
     create: { name: 'Pistol', damage: 15, attackSpeed: 1.5 },
   });
 
   const shotgun = await prisma.weapon.upsert({
     where: { name: 'Shotgun' },
-    update: {},
+    update: { attackSpeed: 0.6 },
     create: { name: 'Shotgun', damage: 35, attackSpeed: 0.6 },
   });
 
   const smg = await prisma.weapon.upsert({
     where: { name: 'SMG' },
-    update: {},
-    create: { name: 'SMG', damage: 10, attackSpeed: 3.0 },
+    update: { attackSpeed: 2 },
+    create: { name: 'SMG', damage: 10, attackSpeed: 2 },
   });
 
   console.log(`Weapons seeded: ${pistol.name}, ${shotgun.name}, ${smg.name}`);
@@ -31,12 +31,12 @@ async function main() {
   // --- Monsters ---
   const strayDog = await prisma.monster.upsert({
     where: { id: 1 },
-    update: {},
+    update: { attackSpeed: 0.4 },
     create: {
       name: 'Stray Dog',
       maxHp: 30,
       damage: 5,
-      attackSpeed: 1.0,
+      attackSpeed: 0.4,
       expReward: 10,
       goldReward: 5,
     },
@@ -44,12 +44,12 @@ async function main() {
 
   const bandit = await prisma.monster.upsert({
     where: { id: 2 },
-    update: {},
+    update: { attackSpeed: 0.5 },
     create: {
       name: 'Bandit',
       maxHp: 60,
       damage: 12,
-      attackSpeed: 0.8,
+      attackSpeed: 0.5,
       expReward: 25,
       goldReward: 15,
     },
@@ -57,12 +57,12 @@ async function main() {
 
   const wolf = await prisma.monster.upsert({
     where: { id: 3 },
-    update: {},
+    update: { attackSpeed: 0.9 },
     create: {
       name: 'Wolf',
       maxHp: 80,
       damage: 18,
-      attackSpeed: 1.2,
+      attackSpeed: 0.9,
       expReward: 40,
       goldReward: 20,
     },
@@ -70,7 +70,7 @@ async function main() {
 
   const ghoul = await prisma.monster.upsert({
     where: { id: 4 },
-    update: {},
+    update: { attackSpeed: 0.6 },
     create: {
       name: 'Ghoul',
       maxHp: 120,
@@ -83,7 +83,7 @@ async function main() {
 
   const mutant = await prisma.monster.upsert({
     where: { id: 5 },
-    update: {},
+    update: { attackSpeed: 0.5 },
     create: {
       name: 'Mutant',
       maxHp: 200,
@@ -278,7 +278,6 @@ async function main() {
 
   console.log('Monster spawns seeded.');
   console.log('\nSeed complete!');
-  console.log(`Default weapon ID for registration: ${pistol.id} (${pistol.name})`);
 }
 
 main()

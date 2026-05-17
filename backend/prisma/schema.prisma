@@ -23,12 +23,22 @@ model User {
 
   isDead Boolean @default(false)
 
-  weaponId Int?
-  weapon   Weapon? @relation(fields: [weaponId], references: [id])
-
-  battles Battle[]
+  equipment Equipment?
+  battles   Battle[]
 
   createdAt DateTime @default(now())
+}
+
+model Equipment {
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
+
+  primaryWeaponId   Int?
+  primaryWeapon     Weapon? @relation("PrimaryWeapon", fields: [primaryWeaponId], references: [id])
+
+  secondaryWeaponId Int?
+  secondaryWeapon   Weapon? @relation("SecondaryWeapon", fields: [secondaryWeaponId], references: [id])
 }
 
 model Weapon {
@@ -37,7 +47,8 @@ model Weapon {
   damage      Int
   attackSpeed Float
 
-  users User[]
+  primaryEquipments   Equipment[] @relation("PrimaryWeapon")
+  secondaryEquipments Equipment[] @relation("SecondaryWeapon")
 }
 
 model Location {

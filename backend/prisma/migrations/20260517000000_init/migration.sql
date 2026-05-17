@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "BattleStatus" AS ENUM ('ACTIVE', 'WON', 'LOST', 'FLED');
 
@@ -13,10 +16,19 @@ CREATE TABLE "User" (
     "hp" INTEGER NOT NULL DEFAULT 100,
     "maxHp" INTEGER NOT NULL DEFAULT 100,
     "isDead" BOOLEAN NOT NULL DEFAULT false,
-    "weaponId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Equipment" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "primaryWeaponId" INTEGER,
+    "secondaryWeaponId" INTEGER,
+
+    CONSTRAINT "Equipment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -96,13 +108,22 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Equipment_userId_key" ON "Equipment"("userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Weapon_name_key" ON "Weapon"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Battle_userId_key" ON "Battle"("userId");
+CREATE INDEX "Battle_userId_idx" ON "Battle"("userId");
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_weaponId_fkey" FOREIGN KEY ("weaponId") REFERENCES "Weapon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Equipment" ADD CONSTRAINT "Equipment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Equipment" ADD CONSTRAINT "Equipment_primaryWeaponId_fkey" FOREIGN KEY ("primaryWeaponId") REFERENCES "Weapon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Equipment" ADD CONSTRAINT "Equipment_secondaryWeaponId_fkey" FOREIGN KEY ("secondaryWeaponId") REFERENCES "Weapon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SubLocation" ADD CONSTRAINT "SubLocation_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -121,3 +142,4 @@ ALTER TABLE "Battle" ADD CONSTRAINT "Battle_monsterId_fkey" FOREIGN KEY ("monste
 
 -- AddForeignKey
 ALTER TABLE "Battle" ADD CONSTRAINT "Battle_subLocationId_fkey" FOREIGN KEY ("subLocationId") REFERENCES "SubLocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+

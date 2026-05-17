@@ -27,7 +27,11 @@ export class UsersService {
     });
   }
 
-  create(data: UserRegistrationPayload & { weaponId?: number }) {
+  create(
+    data: UserRegistrationPayload & {
+      equipment?: { create: { primaryWeaponId: number } };
+    },
+  ) {
     return this.prisma.user.create({ data });
   }
 }

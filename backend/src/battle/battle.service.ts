@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BattleStatus } from '../../prisma/generated/client/enums';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
@@ -16,14 +9,11 @@ const EXP_PER_LEVEL_MULTIPLIER = 100;
 export class BattleService {
   constructor(private prisma: PrismaService) {}
 
-  async enterSubLocation(
-    userId: number,
-    subLocationId: number,
-  ): Promise<EnterBattleResultDto> {
+  async enterSubLocation(userId: number, subLocationId: number): Promise<EnterBattleResultDto> {
     const [user, subLocation] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
-        include: { weapon: true },
+        include: { equipment: { include: { primaryWeapon: true } } },
       }),
       this.prisma.subLocation.findUnique({
         where: { id: subLocationId },
@@ -34,17 +24,12 @@ export class BattleService {
     ]);
 
     if (!user) throw new NotFoundException('User not found');
-    if (!subLocation)
-      throw new NotFoundException(`SubLocation #${subLocationId} not found`);
-    if (user.isDead)
-      throw new ForbiddenException('Your character is dead. Resurrect first.');
-    if (!user.weapon)
-      throw new ForbiddenException('You have no weapon equipped.');
+    if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
+    if (user.isDead) throw new ForbiddenException('Your character is dead. Resurrect first.');
+    if (!user.equipment?.primaryWeapon) throw new ForbiddenException('You have no weapon equipped.');
 
     if (user.level < subLocation.minLevel) {
-      throw new ForbiddenException(
-        `This area requires level ${subLocation.minLevel}. You are level ${user.level}.`,
-      );
+      throw new ForbiddenException(`This area requires level ${subLocation.minLevel}. You are level ${user.level}.`);
     }
 
     if (subLocation.isSafe) {
@@ -68,7 +53,7 @@ export class BattleService {
     });
 
     if (existingBattle && existingBattle.status === BattleStatus.ACTIVE) {
-      const attackCooldownMs = Math.round((1 / user.weapon.attackSpeed) * 1000);
+      const attackCooldownMs = Math.round((1 / user.equipment.primaryWeapon.attackSpeed) * 1000);
       return {
         message: 'You are already in a battle!',
         isSafe: false,
@@ -100,7 +85,7 @@ export class BattleService {
       include: { monster: true },
     });
 
-    const attackCooldownMs = Math.round((1 / user.weapon.attackSpeed) * 1000);
+    const attackCooldownMs = Math.round((1 / user.equipment.primaryWeapon.attackSpeed) * 1000);
 
     return {
       message: `You encountered a ${battle.monster.name}!`,
@@ -128,21 +113,19 @@ export class BattleService {
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
-        include: { weapon: true },
+        include: { equipment: { include: { primaryWeapon: true } } },
       }),
     ]);
 
     if (!user) throw new NotFoundException('User not found');
-    if (user.isDead)
-      throw new ForbiddenException('Your character is dead. Resurrect first.');
-    if (!user.weapon)
-      throw new ForbiddenException('You have no weapon equipped.');
+    if (user.isDead) throw new ForbiddenException('Your character is dead. Resurrect first.');
+    if (!user.equipment?.primaryWeapon) throw new ForbiddenException('You have no weapon equipped.');
     if (!battle || battle.status !== BattleStatus.ACTIVE) {
       throw new BadRequestException('You are not in an active battle.');
     }
 
     const now = new Date();
-    const weapon = user.weapon;
+    const weapon = user.equipment.primaryWeapon;
     const monster = battle.monster;
 
     // --- Anti-cheat: enforce attack cooldown ---
@@ -151,20 +134,14 @@ export class BattleService {
       const elapsed = now.getTime() - battle.lastPlayerAttackAt.getTime();
       if (elapsed < attackCooldownMs) {
         const remainingMs = attackCooldownMs - elapsed;
-        throw new HttpException(
-          { message: 'Attack on cooldown', remainingMs },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
+        throw new HttpException({ message: 'Attack on cooldown', remainingMs }, HttpStatus.TOO_MANY_REQUESTS);
       }
     }
 
     // --- Calculate accumulated monster attacks since last check ---
     const monsterIntervalMs = Math.round((1 / monster.attackSpeed) * 1000);
-    const timeSinceLastMonsterAttack =
-      now.getTime() - battle.lastMonsterAttackAt.getTime();
-    const monsterAttackTicks = Math.floor(
-      timeSinceLastMonsterAttack / monsterIntervalMs,
-    );
+    const timeSinceLastMonsterAttack = now.getTime() - battle.lastMonsterAttackAt.getTime();
+    const monsterAttackTicks = Math.floor(timeSinceLastMonsterAttack / monsterIntervalMs);
     const monsterDamageDealt = monsterAttackTicks * monster.damage;
 
     let playerCurrentHp = Math.max(0, user.hp - monsterDamageDealt);
@@ -172,20 +149,11 @@ export class BattleService {
 
     // --- Apply player damage to monster ---
     const playerDamageDealt = weapon.damage;
-    const newMonsterHp = Math.max(
-      0,
-      battle.monsterCurrentHp - playerDamageDealt,
-    );
+    const newMonsterHp = Math.max(0, battle.monsterCurrentHp - playerDamageDealt);
     const monsterDied = newMonsterHp <= 0;
 
     // Advance monster attack timer by consumed ticks only
-    const newLastMonsterAttackAt =
-      monsterAttackTicks > 0
-        ? new Date(
-            battle.lastMonsterAttackAt.getTime() +
-              monsterAttackTicks * monsterIntervalMs,
-          )
-        : battle.lastMonsterAttackAt;
+    const newLastMonsterAttackAt = monsterAttackTicks > 0 ? new Date(battle.lastMonsterAttackAt.getTime() + monsterAttackTicks * monsterIntervalMs) : battle.lastMonsterAttackAt;
 
     let expGained = 0;
     let goldGained = 0;
@@ -198,10 +166,7 @@ export class BattleService {
 
         const newExp = user.exp + expGained;
         const newGold = user.gold + goldGained;
-        const { level: newLevel, remainingExp } = this.calculateLevelUp(
-          user.level,
-          newExp,
-        );
+        const { level: newLevel, remainingExp } = this.calculateLevelUp(user.level, newExp);
         leveledUp = newLevel > user.level;
 
         // Рассчитываем финальное HP с учётом смерти игрока
@@ -247,11 +212,7 @@ export class BattleService {
       }
     });
 
-    const finalStatus = monsterDied
-      ? BattleStatus.WON
-      : playerDied
-        ? BattleStatus.LOST
-        : BattleStatus.ACTIVE;
+    const finalStatus = monsterDied ? BattleStatus.WON : playerDied ? BattleStatus.LOST : BattleStatus.ACTIVE;
 
     return {
       playerDamageDealt,
@@ -315,18 +276,14 @@ export class BattleService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { weapon: true },
+      include: { equipment: { include: { primaryWeapon: true } } },
     });
 
-    const attackCooldownMs = user?.weapon
-      ? Math.round((1 / user.weapon.attackSpeed) * 1000)
-      : 0;
+    const attackCooldownMs = user?.equipment?.primaryWeapon ? Math.round((1 / user.equipment.primaryWeapon.attackSpeed) * 1000) : 0;
 
     // Предварительно считаем накопленный урон монстра для информирования клиента
     const now = new Date();
-    const monsterIntervalMs = Math.round(
-      (1 / battle.monster.attackSpeed) * 1000,
-    );
+    const monsterIntervalMs = Math.round((1 / battle.monster.attackSpeed) * 1000);
     const elapsed = now.getTime() - battle.lastMonsterAttackAt.getTime();
     const pendingMonsterTicks = Math.floor(elapsed / monsterIntervalMs);
     const pendingMonsterDamage = pendingMonsterTicks * battle.monster.damage;
@@ -378,10 +335,7 @@ export class BattleService {
     return entries[entries.length - 1];
   }
 
-  private calculateLevelUp(
-    currentLevel: number,
-    totalExp: number,
-  ): { level: number; remainingExp: number } {
+  private calculateLevelUp(currentLevel: number, totalExp: number): { level: number; remainingExp: number } {
     let level = currentLevel;
     let exp = totalExp;
 

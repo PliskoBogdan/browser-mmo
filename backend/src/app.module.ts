@@ -10,15 +10,7 @@ import { BattleModule } from './battle/battle.module';
 import { CharacterModule } from './character/character.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    AuthModule,
-    UsersModule,
-    LocationModule,
-    BattleModule,
-    CharacterModule,
-  ],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule],
   controllers: [AppController],
   providers: [AppService],
 })

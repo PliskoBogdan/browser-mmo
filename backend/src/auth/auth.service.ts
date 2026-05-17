@@ -26,7 +26,7 @@ export class AuthService {
       email,
       username,
       password: hash,
-      ...(startingWeapon ? { weaponId: startingWeapon.id } : {}),
+      ...(startingWeapon ? { equipment: { create: { primaryWeaponId: startingWeapon.id } } } : {}),
     });
 
     return this.signToken(user.id);

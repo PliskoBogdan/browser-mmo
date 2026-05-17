@@ -21,8 +21,11 @@ export class CharacterService {
         hp: true,
         maxHp: true,
         isDead: true,
-        weapon: {
-          select: { id: true, name: true, damage: true, attackSpeed: true },
+        equipment: {
+          select: {
+            primaryWeapon: { select: { id: true, name: true, damage: true, attackSpeed: true } },
+            secondaryWeapon: { select: { id: true, name: true, damage: true, attackSpeed: true } },
+          },
         },
         createdAt: true,
       },
@@ -33,9 +36,7 @@ export class CharacterService {
     return {
       ...user,
       expToNextLevel: user.level * 100,
-      attackCooldownMs: user.weapon
-        ? Math.round((1 / user.weapon.attackSpeed) * 1000)
-        : null,
+      attackCooldownMs: user.equipment?.primaryWeapon ? Math.round((1 / user.equipment.primaryWeapon.attackSpeed) * 1000) : null,
     };
   }
 

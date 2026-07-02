@@ -5,8 +5,8 @@
       Battle
     </div>
 
-    <BattleResult 
-        v-if="lastResult !== null && lastResult.battleStatus === 'WON'"
+    <BattleResult
+        v-if="lastResult !== null && lastResult.battleStatus === 'WON' && !battle"
         :battleResult="lastResult"
     />
 

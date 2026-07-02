@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BattleStatus } from '../../prisma/generated/client/enums';
+import { BattleStatus, SubLocationKind } from '../../prisma/generated/client/enums';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
 
 const EXP_PER_LEVEL_MULTIPLIER = 100;
@@ -32,7 +32,7 @@ export class BattleService {
       throw new ForbiddenException(`This area requires level ${subLocation.minLevel}. You are level ${user.level}.`);
     }
 
-    if (subLocation.isSafe) {
+    if (subLocation.kind !== SubLocationKind.DANGER) {
       return {
         message: `You entered ${subLocation.name}. It's peaceful here.`,
         isSafe: true,

@@ -23,6 +23,11 @@ model User {
 
   isDead Boolean @default(false)
 
+  currentLocationId Int?
+  currentLocation   Location? @relation(fields: [currentLocationId], references: [id])
+  posX              Int       @default(1)
+  posY              Int       @default(2)
+
   equipment Equipment?
   battles   Battle[]
 
@@ -57,7 +62,15 @@ model Location {
   description String?
   minLevel    Int     @default(1)
 
+  mapX       Int
+  mapY       Int
+  gridWidth  Int @default(3)
+  gridHeight Int @default(3)
+
   subLocations SubLocation[]
+  players      User[]
+
+  @@unique([mapX, mapY])
 }
 
 model SubLocation {
@@ -66,11 +79,22 @@ model SubLocation {
   location    Location @relation(fields: [locationId], references: [id])
   name        String
   description String?
-  isSafe      Boolean @default(false)
-  minLevel    Int     @default(1)
+  kind        SubLocationKind @default(DANGER)
+  minLevel    Int             @default(1)
+
+  gridX Int
+  gridY Int
 
   monsters SubLocationMonster[]
   battles  Battle[]
+
+  @@unique([locationId, gridX, gridY])
+}
+
+enum SubLocationKind {
+  SAFE
+  SHOP
+  DANGER
 }
 
 model Monster {

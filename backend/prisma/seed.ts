@@ -97,138 +97,175 @@ async function main() {
   console.log(`Monsters seeded: ${[strayDog, bandit, wolf, ghoul, mutant].map((m) => m.name).join(', ')}`);
 
   // --- Locations ---
+  const abandonedCityData = {
+    id: 1,
+    name: 'Abandoned City',
+    description: 'A ruined city overrun by bandits and stray animals.',
+    minLevel: 1,
+    mapX: 1,
+    mapY: 2,
+    gridWidth: 3,
+    gridHeight: 3,
+  };
   const abandonedCity = await prisma.location.upsert({
     where: { id: 1 },
-    update: {},
-    create: {
-      name: 'Abandoned City',
-      description: 'A ruined city overrun by bandits and stray animals.',
-      minLevel: 1,
-    },
+    update: abandonedCityData,
+    create: abandonedCityData,
   });
 
+  const darkForestData = {
+    id: 2,
+    name: 'Dark Forest',
+    description: 'An ancient forest where unnatural creatures roam at night.',
+    minLevel: 5,
+    mapX: 3,
+    mapY: 1,
+    gridWidth: 3,
+    gridHeight: 3,
+  };
   const darkForest = await prisma.location.upsert({
     where: { id: 2 },
-    update: {},
-    create: {
-      name: 'Dark Forest',
-      description: 'An ancient forest where unnatural creatures roam at night.',
-      minLevel: 5,
-    },
+    update: darkForestData,
+    create: darkForestData,
   });
 
+  const wastelandData = {
+    id: 3,
+    name: 'Toxic Wasteland',
+    description: 'A radioactive wasteland filled with mutated horrors.',
+    minLevel: 10,
+    mapX: 5,
+    mapY: 3,
+    gridWidth: 3,
+    gridHeight: 2,
+  };
   const wasteland = await prisma.location.upsert({
     where: { id: 3 },
-    update: {},
-    create: {
-      name: 'Toxic Wasteland',
-      description: 'A radioactive wasteland filled with mutated horrors.',
-      minLevel: 10,
-    },
+    update: wastelandData,
+    create: wastelandData,
   });
 
   console.log(`Locations seeded: ${[abandonedCity, darkForest, wasteland].map((l) => l.name).join(', ')}`);
 
-  // --- Sub-Locations: Abandoned City ---
-  const cityGates = await prisma.subLocation.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      locationId: abandonedCity.id,
-      name: 'City Gates',
-      description: 'The entrance to the abandoned city. Relatively safe.',
-      isSafe: true,
-      minLevel: 1,
-    },
-  });
+  // --- Sub-Locations: Abandoned City (3x3 grid) ---
+  const cityGatesData = {
+    id: 1,
+    locationId: abandonedCity.id,
+    name: 'City Gates',
+    description: 'The entrance to the abandoned city. Relatively safe.',
+    kind: 'SAFE' as const,
+    minLevel: 1,
+    gridX: 1,
+    gridY: 0,
+  };
+  const cityGates = await prisma.subLocation.upsert({ where: { id: 1 }, update: cityGatesData, create: cityGatesData });
 
-  const cityOutskirts = await prisma.subLocation.upsert({
-    where: { id: 2 },
-    update: {},
-    create: {
-      locationId: abandonedCity.id,
-      name: 'City Outskirts',
-      description: 'The outskirts are prowled by stray dogs.',
-      isSafe: false,
-      minLevel: 1,
-    },
-  });
+  const tradingPostData = {
+    id: 9,
+    locationId: abandonedCity.id,
+    name: 'Trading Post',
+    description: 'A makeshift merchant stall selling salvaged gear.',
+    kind: 'SHOP' as const,
+    minLevel: 1,
+    gridX: 2,
+    gridY: 0,
+  };
+  const tradingPost = await prisma.subLocation.upsert({ where: { id: 9 }, update: tradingPostData, create: tradingPostData });
 
-  const cityCenter = await prisma.subLocation.upsert({
-    where: { id: 3 },
-    update: {},
-    create: {
-      locationId: abandonedCity.id,
-      name: 'City Center',
-      description: 'Bandits have made this their home.',
-      isSafe: false,
-      minLevel: 3,
-    },
-  });
+  const cityOutskirtsData = {
+    id: 2,
+    locationId: abandonedCity.id,
+    name: 'City Outskirts',
+    description: 'The outskirts are prowled by stray dogs.',
+    kind: 'DANGER' as const,
+    minLevel: 1,
+    gridX: 0,
+    gridY: 2,
+  };
+  const cityOutskirts = await prisma.subLocation.upsert({ where: { id: 2 }, update: cityOutskirtsData, create: cityOutskirtsData });
 
-  // --- Sub-Locations: Dark Forest ---
-  const forestEdge = await prisma.subLocation.upsert({
-    where: { id: 4 },
-    update: {},
-    create: {
-      locationId: darkForest.id,
-      name: 'Forest Edge',
-      description: 'The edge of the forest. Safe to rest here.',
-      isSafe: true,
-      minLevel: 5,
-    },
-  });
+  const cityCenterData = {
+    id: 3,
+    locationId: abandonedCity.id,
+    name: 'City Center',
+    description: 'Bandits have made this their home.',
+    kind: 'DANGER' as const,
+    minLevel: 3,
+    gridX: 2,
+    gridY: 2,
+  };
+  const cityCenter = await prisma.subLocation.upsert({ where: { id: 3 }, update: cityCenterData, create: cityCenterData });
 
-  const deepForest = await prisma.subLocation.upsert({
-    where: { id: 5 },
-    update: {},
-    create: {
-      locationId: darkForest.id,
-      name: 'Deep Forest',
-      description: 'Wolves hunt in packs here.',
-      isSafe: false,
-      minLevel: 5,
-    },
-  });
+  // --- Sub-Locations: Dark Forest (3x3 grid) ---
+  const forestEdgeData = {
+    id: 4,
+    locationId: darkForest.id,
+    name: 'Forest Edge',
+    description: 'The edge of the forest. Safe to rest here.',
+    kind: 'SAFE' as const,
+    minLevel: 5,
+    gridX: 1,
+    gridY: 0,
+  };
+  const forestEdge = await prisma.subLocation.upsert({ where: { id: 4 }, update: forestEdgeData, create: forestEdgeData });
 
-  const forestRuins = await prisma.subLocation.upsert({
-    where: { id: 6 },
-    update: {},
-    create: {
-      locationId: darkForest.id,
-      name: 'Forest Ruins',
-      description: 'Ancient ruins crawling with ghouls.',
-      isSafe: false,
-      minLevel: 8,
-    },
-  });
+  const deepForestData = {
+    id: 5,
+    locationId: darkForest.id,
+    name: 'Deep Forest',
+    description: 'Wolves hunt in packs here.',
+    kind: 'DANGER' as const,
+    minLevel: 5,
+    gridX: 0,
+    gridY: 2,
+  };
+  const deepForest = await prisma.subLocation.upsert({ where: { id: 5 }, update: deepForestData, create: deepForestData });
 
-  // --- Sub-Locations: Toxic Wasteland ---
-  const wastelandCamp = await prisma.subLocation.upsert({
-    where: { id: 7 },
-    update: {},
-    create: {
-      locationId: wasteland.id,
-      name: 'Survivor Camp',
-      description: 'A small camp of survivors. Safe to rest.',
-      isSafe: true,
-      minLevel: 10,
-    },
-  });
+  const forestRuinsData = {
+    id: 6,
+    locationId: darkForest.id,
+    name: 'Forest Ruins',
+    description: 'Ancient ruins crawling with ghouls.',
+    kind: 'DANGER' as const,
+    minLevel: 8,
+    gridX: 2,
+    gridY: 2,
+  };
+  const forestRuins = await prisma.subLocation.upsert({ where: { id: 6 }, update: forestRuinsData, create: forestRuinsData });
 
-  const wastelandZone = await prisma.subLocation.upsert({
-    where: { id: 8 },
-    update: {},
-    create: {
-      locationId: wasteland.id,
-      name: 'Contaminated Zone',
-      description: 'Mutants roam this toxic hellscape.',
-      isSafe: false,
-      minLevel: 10,
-    },
-  });
+  // --- Sub-Locations: Toxic Wasteland (3x2 grid) ---
+  const wastelandCampData = {
+    id: 7,
+    locationId: wasteland.id,
+    name: 'Survivor Camp',
+    description: 'A small camp of survivors. Safe to rest.',
+    kind: 'SAFE' as const,
+    minLevel: 10,
+    gridX: 1,
+    gridY: 0,
+  };
+  const wastelandCamp = await prisma.subLocation.upsert({ where: { id: 7 }, update: wastelandCampData, create: wastelandCampData });
 
-  console.log(`Sub-locations seeded: ${[cityGates, cityOutskirts, cityCenter, forestEdge, deepForest, forestRuins, wastelandCamp, wastelandZone].map((s) => s.name).join(', ')}`);
+  const wastelandZoneData = {
+    id: 8,
+    locationId: wasteland.id,
+    name: 'Contaminated Zone',
+    description: 'Mutants roam this toxic hellscape.',
+    kind: 'DANGER' as const,
+    minLevel: 10,
+    gridX: 1,
+    gridY: 1,
+  };
+  const wastelandZone = await prisma.subLocation.upsert({ where: { id: 8 }, update: wastelandZoneData, create: wastelandZoneData });
+
+  console.log(
+    `Sub-locations seeded: ${[cityGates, tradingPost, cityOutskirts, cityCenter, forestEdge, deepForest, forestRuins, wastelandCamp, wastelandZone].map((s) => s.name).join(', ')}`,
+  );
+
+  // Explicit ids were used above so upserts stay stable across reseeds; keep the
+  // autoincrement sequences ahead of them so future inserts don't collide.
+  await prisma.$executeRawUnsafe(`SELECT setval('"Location_id_seq"', (SELECT MAX(id) FROM "Location"))`);
+  await prisma.$executeRawUnsafe(`SELECT setval('"SubLocation_id_seq"', (SELECT MAX(id) FROM "SubLocation"))`);
 
   // --- Monster Spawns ---
   // City Outskirts: Stray Dogs (high weight) + Bandits (low weight)

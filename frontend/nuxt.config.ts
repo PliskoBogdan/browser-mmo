@@ -1,5 +1,7 @@
 import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify';
 
+const tresWhitelist = ['TresCanvas', 'TresCanvasContext', 'TresLeches', 'TresScene'];
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
 
@@ -11,7 +13,12 @@ export default defineNuxtConfig({
 
   vite: {
     vue: {
-      template: { transformAssetUrls },
+      template: {
+        transformAssetUrls,
+        compilerOptions: {
+          isCustomElement: (tag: string) => ((/^Tres[A-Z]/.test(tag) || tag.startsWith('tres-')) && !tresWhitelist.includes(tag)) || tag === 'primitive',
+        },
+      },
     },
     plugins: [vuetify({ autoImport: true })],
   },

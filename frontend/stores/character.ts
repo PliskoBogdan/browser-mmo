@@ -21,6 +21,7 @@ export interface Character {
   hp: number;
   maxHp: number;
   isDead: boolean;
+  position: { locationId: number | null; x: number; y: number };
   equipment: Equipment | null;
   attackCooldownMs: number | null;
   createdAt: string;

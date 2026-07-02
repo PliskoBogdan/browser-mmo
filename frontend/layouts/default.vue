@@ -20,7 +20,7 @@
           :prepend-icon="item.icon"
           :title="item.title"
           :to="item.to"
-          :active="route.path === item.to"
+          :active="route.path === item.to || route.path.startsWith(item.to + '/')"
           color="primary"
           rounded="lg"
         />
@@ -59,6 +59,7 @@ const route = useRoute();
 const authStore = useAuthStore();
 const characterStore = useCharacterStore();
 const battleStore = useBattleStore();
+const worldStore = useWorldStore();
 
 const { character } = storeToRefs(characterStore);
 
@@ -77,6 +78,7 @@ async function handleLogout() {
   authStore.logout();
   characterStore.clear();
   battleStore.clear();
+  worldStore.clear();
   await navigateTo("/auth/login");
 }
 </script>

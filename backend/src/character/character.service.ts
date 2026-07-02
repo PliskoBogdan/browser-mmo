@@ -21,6 +21,9 @@ export class CharacterService {
         hp: true,
         maxHp: true,
         isDead: true,
+        currentLocationId: true,
+        posX: true,
+        posY: true,
         equipment: {
           select: {
             primaryWeapon: { select: { id: true, name: true, damage: true, attackSpeed: true } },
@@ -33,8 +36,11 @@ export class CharacterService {
 
     if (!user) throw new NotFoundException('User not found');
 
+    const { currentLocationId, posX, posY, ...rest } = user;
+
     return {
-      ...user,
+      ...rest,
+      position: { locationId: currentLocationId, x: posX, y: posY },
       expToNextLevel: user.level * 100,
       attackCooldownMs: user.equipment?.primaryWeapon ? Math.round((1 / user.equipment.primaryWeapon.attackSpeed) * 1000) : null,
     };

@@ -56,6 +56,7 @@ export const useBattleStore = defineStore('battle', () => {
       const data = await request<{ isSafe: boolean; message: string; battle?: ActiveBattle }>(`/battle/enter/${subLocationId}`, { method: 'POST' });
       if (data.battle) {
         battle.value = data.battle;
+        lastResult.value = null;
         setCooldown(data.battle.attackCooldownMs);
       }
       return { isSafe: data.isSafe, message: data.message };

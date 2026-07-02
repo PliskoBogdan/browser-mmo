@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -15,6 +15,10 @@ export class AuthService {
   ) {}
 
   async register(email: string, username: string, password: string): Promise<string> {
+    const [existingEmail, existingUsername] = await Promise.all([this.users.findByEmail(email), this.users.findByUsername(username)]);
+    if (existingEmail) throw new ConflictException('An account with this email already exists.');
+    if (existingUsername) throw new ConflictException('This username is already taken.');
+
     const hash = await bcrypt.hash(password, 10);
 
     // Находим стартовое оружие (Pistol должен быть в БД после seed)

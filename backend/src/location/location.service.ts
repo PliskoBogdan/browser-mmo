@@ -111,13 +111,26 @@ export class LocationService {
     }
     await this.assertNoActiveBattle(userId);
 
-    const entry = location.subLocations.find((s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP) ?? null;
-    const posX = entry?.gridX ?? 0;
-    const posY = entry?.gridY ?? 0;
+    const { x: posX, y: posY } = this.computeEntryPoint(location.subLocations);
 
     await this.prisma.user.update({ where: { id: userId }, data: { currentLocationId: locationId, posX, posY } });
 
     return { locationId, position: { x: posX, y: posY } };
+  }
+
+  // Where a player lands when entering a location, and where they retreat to after winning a fight.
+  async getEntryPoint(locationId: number): Promise<{ x: number; y: number }> {
+    const location = await this.prisma.location.findUnique({
+      where: { id: locationId },
+      select: { subLocations: { select: { gridX: true, gridY: true, kind: true } } },
+    });
+    if (!location) return { x: 0, y: 0 };
+    return this.computeEntryPoint(location.subLocations);
+  }
+
+  private computeEntryPoint(subLocations: { gridX: number; gridY: number; kind: SubLocationKind }[]): { x: number; y: number } {
+    const entry = subLocations.find((s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP) ?? null;
+    return { x: entry?.gridX ?? 0, y: entry?.gridY ?? 0 };
   }
 
   async moveInLocation(userId: number, x: number, y: number) {

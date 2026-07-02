@@ -13,6 +13,7 @@ export class AttackResultDto {
   leveledUp: boolean;
   playerDied: boolean;
   attackCooldownMs: number;
+  newPosition?: { x: number; y: number };
 }
 
 export class EnterBattleResultDto {

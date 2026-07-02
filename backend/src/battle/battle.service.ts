@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { LocationService } from '../location/location.service';
 import { BattleStatus, SubLocationKind } from '../../prisma/generated/client/enums';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
 
@@ -7,7 +8,10 @@ const EXP_PER_LEVEL_MULTIPLIER = 100;
 
 @Injectable()
 export class BattleService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private locationService: LocationService,
+  ) {}
 
   async enterSubLocation(userId: number, subLocationId: number): Promise<EnterBattleResultDto> {
     const [user, subLocation] = await Promise.all([
@@ -109,7 +113,7 @@ export class BattleService {
     const [battle, user] = await Promise.all([
       this.prisma.battle.findFirst({
         where: { userId, status: BattleStatus.ACTIVE },
-        include: { monster: true },
+        include: { monster: true, subLocation: { select: { locationId: true } } },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
@@ -158,6 +162,13 @@ export class BattleService {
     let expGained = 0;
     let goldGained = 0;
     let leveledUp = false;
+    let newPosition: { x: number; y: number } | undefined;
+
+    // Winning a fight sends the player back to the location's entry point rather
+    // than leaving them stranded on the danger tile they just cleared.
+    if (monsterDied && !playerDied) {
+      newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       if (monsterDied) {
@@ -182,6 +193,7 @@ export class BattleService {
             level: newLevel,
             hp: finalHp,
             isDead: playerDied,
+            ...(newPosition ? { posX: newPosition.x, posY: newPosition.y } : {}),
           },
         });
 
@@ -227,6 +239,7 @@ export class BattleService {
       leveledUp,
       playerDied,
       attackCooldownMs,
+      newPosition,
     };
   }
 

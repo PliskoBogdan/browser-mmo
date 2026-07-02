@@ -32,6 +32,7 @@ export interface AttackResult {
   leveledUp: boolean;
   playerDied: boolean;
   attackCooldownMs: number;
+  newPosition?: { x: number; y: number };
 }
 
 export const useBattleStore = defineStore('battle', () => {

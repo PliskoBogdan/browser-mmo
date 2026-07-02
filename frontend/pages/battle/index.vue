@@ -128,6 +128,7 @@ definePageMeta({ middleware: 'auth' });
 
 const battleStore = useBattleStore();
 const characterStore = useCharacterStore();
+const worldStore = useWorldStore();
 const { battle, lastResult, canAttack, cooldownRemaining } = storeToRefs(battleStore);
 
 const loading = ref(false);
@@ -174,6 +175,9 @@ async function handleAttack() {
 
     if (result.battleStatus === 'WON') {
       battleEndType.value = 'success';
+      if (result.newPosition) {
+        worldStore.hydratePosition({ locationId: worldStore.position.locationId, x: result.newPosition.x, y: result.newPosition.y });
+      }
       await characterStore.fetch();
     } else if (result.battleStatus === 'LOST' || result.playerDied) {
       battleEndType.value = 'error';

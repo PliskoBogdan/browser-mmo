@@ -8,9 +8,10 @@ import { UsersModule } from './users/users.module';
 import { LocationModule } from './location/location.module';
 import { BattleModule } from './battle/battle.module';
 import { CharacterModule } from './character/character.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule, InventoryModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -107,6 +107,38 @@
           </v-card-text>
         </v-card>
       </v-col>
+      <!-- Inventory -->
+      <v-col cols="12">
+        <v-card elevation="4">
+          <v-card-title>
+            <v-icon class="mr-2" color="accent">mdi-bag-personal</v-icon>
+            Inventory
+          </v-card-title>
+
+          <v-card-text>
+            <div v-if="inventoryStore.loading" class="d-flex justify-center py-6">
+              <v-progress-circular indeterminate color="primary" />
+            </div>
+            <div v-else-if="!inventoryStore.items.length" class="text-medium-emphasis text-body-2 py-2">
+              Nothing here yet — loot from monsters will show up in your backpack. Visit a Trading Post to sell it for gold.
+            </div>
+            <v-row v-else dense>
+              <v-col v-for="entry in inventoryStore.items" :key="entry.itemId" cols="12" sm="6" md="4">
+                <v-card variant="tonal" :style="{ borderLeft: `4px solid ${rarityColor(entry.rarity)}` }">
+                  <v-card-text class="pa-3">
+                    <div class="d-flex justify-space-between align-center">
+                      <span class="font-weight-bold">{{ entry.name }}</span>
+                      <v-chip size="x-small" variant="tonal">x{{ entry.quantity }}</v-chip>
+                    </div>
+                    <div v-if="entry.description" class="text-caption text-medium-emphasis mt-1">{{ entry.description }}</div>
+                    <div class="text-caption text-warning mt-1">{{ entry.sellValue }}g each</div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-card-text>
+        </v-card>
+      </v-col>
     </v-row>
 
     <v-skeleton-loader v-else-if="characterStore.loading" type="card, card" />
@@ -117,11 +149,19 @@
 definePageMeta({ middleware: 'auth' });
 
 const characterStore = useCharacterStore();
+const inventoryStore = useInventoryStore();
 const { character } = storeToRefs(characterStore);
 
 const resurrecting = ref(false);
 
-onMounted(() => characterStore.fetch());
+onMounted(() => {
+  characterStore.fetch();
+  inventoryStore.fetchInventory();
+});
+
+function rarityColor(rarity: 'COMMON' | 'UNCOMMON' | 'RARE') {
+  return { COMMON: '#9e9e9e', UNCOMMON: '#4caf50', RARE: '#ffab00' }[rarity];
+}
 
 async function handleResurrect() {
   resurrecting.value = true;

@@ -96,6 +96,67 @@ async function main() {
 
   console.log(`Monsters seeded: ${[strayDog, bandit, wolf, ghoul, mutant].map((m) => m.name).join(', ')}`);
 
+  // --- Items ---
+  const scrapMetal = await prisma.item.upsert({
+    where: { name: 'Scrap Metal' },
+    update: {},
+    create: { name: 'Scrap Metal', description: 'Rusted fragments of pre-war machinery.', sellValue: 3, rarity: 'COMMON' },
+  });
+  const rustyBolts = await prisma.item.upsert({
+    where: { name: 'Rusty Bolts' },
+    update: {},
+    create: { name: 'Rusty Bolts', description: 'A handful of corroded bolts.', sellValue: 4, rarity: 'COMMON' },
+  });
+  const tornCloth = await prisma.item.upsert({
+    where: { name: 'Torn Cloth' },
+    update: {},
+    create: { name: 'Torn Cloth', description: "Ragged fabric stripped from a bandit's coat.", sellValue: 5, rarity: 'COMMON' },
+  });
+  const banditTrinket = await prisma.item.upsert({
+    where: { name: "Bandit's Trinket" },
+    update: {},
+    create: { name: "Bandit's Trinket", description: "A cheap charm a bandit carried for luck. Didn't work.", sellValue: 20, rarity: 'UNCOMMON' },
+  });
+  const wolfPelt = await prisma.item.upsert({
+    where: { name: 'Wolf Pelt' },
+    update: {},
+    create: { name: 'Wolf Pelt', description: 'A thick, matted pelt. Traders pay well for these.', sellValue: 15, rarity: 'UNCOMMON' },
+  });
+  const ghoulIchor = await prisma.item.upsert({
+    where: { name: 'Ghoul Ichor' },
+    update: {},
+    create: { name: 'Ghoul Ichor', description: 'A vial of viscous, faintly glowing fluid.', sellValue: 30, rarity: 'UNCOMMON' },
+  });
+  const mutantGland = await prisma.item.upsert({
+    where: { name: 'Mutant Gland' },
+    update: {},
+    create: { name: 'Mutant Gland', description: 'A pulsing organ still warm to the touch. Valuable to the right buyer.', sellValue: 75, rarity: 'RARE' },
+  });
+
+  console.log(`Items seeded: ${[scrapMetal, rustyBolts, tornCloth, banditTrinket, wolfPelt, ghoulIchor, mutantGland].map((i) => i.name).join(', ')}`);
+
+  // --- Monster loot tables ---
+  const lootTable: { monsterId: number; itemId: number; dropChance: number; minQuantity: number; maxQuantity: number }[] = [
+    { monsterId: strayDog.id, itemId: scrapMetal.id, dropChance: 70, minQuantity: 1, maxQuantity: 2 },
+    { monsterId: bandit.id, itemId: tornCloth.id, dropChance: 60, minQuantity: 1, maxQuantity: 2 },
+    { monsterId: bandit.id, itemId: banditTrinket.id, dropChance: 15, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: wolf.id, itemId: wolfPelt.id, dropChance: 50, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: ghoul.id, itemId: ghoulIchor.id, dropChance: 40, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: ghoul.id, itemId: rustyBolts.id, dropChance: 60, minQuantity: 1, maxQuantity: 3 },
+    { monsterId: mutant.id, itemId: mutantGland.id, dropChance: 35, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: mutant.id, itemId: scrapMetal.id, dropChance: 80, minQuantity: 2, maxQuantity: 4 },
+  ];
+
+  for (const entry of lootTable) {
+    await prisma.monsterLoot.upsert({
+      where: { monsterId_itemId: { monsterId: entry.monsterId, itemId: entry.itemId } },
+      update: entry,
+      create: entry,
+    });
+  }
+
+  console.log('Monster loot tables seeded.');
+
   // --- Locations ---
   const abandonedCityData = {
     id: 1,

@@ -33,6 +33,7 @@
         :position="vec3(worldX(tile.x), 0.55, worldZ(tile.y))"
         center
         :distance-factor="8"
+        :z-index-range="[10, 0]"
       >
         <div class="tile-label" :class="tile.kind.toLowerCase()">{{ tile.label }}</div>
       </Html>

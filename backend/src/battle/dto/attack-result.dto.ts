@@ -14,6 +14,7 @@ export class AttackResultDto {
   playerDied: boolean;
   attackCooldownMs: number;
   newPosition?: { x: number; y: number };
+  lootDrops?: { name: string; quantity: number; rarity: string }[];
 }
 
 export class EnterBattleResultDto {

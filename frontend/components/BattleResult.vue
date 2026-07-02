@@ -10,6 +10,16 @@
       >
         Go to the World map and enter a dangerous zone
       </div>
+
+      <div v-if="battleResult.lootDrops?.length" class="mb-4">
+        <div class="text-caption text-medium-emphasis mb-2">Loot found:</div>
+        <div class="d-flex flex-wrap justify-center" style="gap: 8px">
+          <v-chip v-for="drop in battleResult.lootDrops" :key="drop.name" :color="rarityColor(drop.rarity)" variant="tonal" prepend-icon="mdi-cube-outline">
+            {{ drop.name }} x{{ drop.quantity }}
+          </v-chip>
+        </div>
+      </div>
+
       <v-btn color="primary" to="/world" prepend-icon="mdi-map"
         >Go to World</v-btn
       >
@@ -38,4 +48,8 @@ const battleResultMessage = computed<string>(() => {
 
   return "";
 });
+
+function rarityColor(rarity: "COMMON" | "UNCOMMON" | "RARE") {
+  return { COMMON: "#9e9e9e", UNCOMMON: "#4caf50", RARE: "#ffab00" }[rarity];
+}
 </script>

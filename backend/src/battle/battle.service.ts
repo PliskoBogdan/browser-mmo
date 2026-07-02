@@ -113,7 +113,10 @@ export class BattleService {
     const [battle, user] = await Promise.all([
       this.prisma.battle.findFirst({
         where: { userId, status: BattleStatus.ACTIVE },
-        include: { monster: true, subLocation: { select: { locationId: true } } },
+        include: {
+          monster: { include: { loot: { include: { item: true } } } },
+          subLocation: { select: { locationId: true } },
+        },
       }),
       this.prisma.user.findUnique({
         where: { id: userId },
@@ -163,11 +166,14 @@ export class BattleService {
     let goldGained = 0;
     let leveledUp = false;
     let newPosition: { x: number; y: number } | undefined;
+    let lootDrops: { name: string; quantity: number; rarity: string }[] = [];
 
     // Winning a fight sends the player back to the location's entry point rather
-    // than leaving them stranded on the danger tile they just cleared.
+    // than leaving them stranded on the danger tile they just cleared, and rolls
+    // the monster's loot table for anything worth carrying home.
     if (monsterDied && !playerDied) {
       newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
+      lootDrops = this.rollLoot(monster.loot);
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -196,6 +202,16 @@ export class BattleService {
             ...(newPosition ? { posX: newPosition.x, posY: newPosition.y } : {}),
           },
         });
+
+        for (const drop of monster.loot) {
+          const dropped = lootDrops.find((d) => d.name === drop.item.name);
+          if (!dropped) continue;
+          await tx.inventoryItem.upsert({
+            where: { userId_itemId: { userId, itemId: drop.itemId } },
+            update: { quantity: { increment: dropped.quantity } },
+            create: { userId, itemId: drop.itemId, quantity: dropped.quantity },
+          });
+        }
 
         if (playerDied) playerCurrentHp = 0;
       } else if (playerDied) {
@@ -240,6 +256,7 @@ export class BattleService {
       playerDied,
       attackCooldownMs,
       newPosition,
+      lootDrops,
     };
   }
 
@@ -358,5 +375,19 @@ export class BattleService {
     }
 
     return { level, remainingExp: exp };
+  }
+
+  private rollLoot(
+    loot: { itemId: number; dropChance: number; minQuantity: number; maxQuantity: number; item: { name: string; rarity: string } }[],
+  ): { name: string; quantity: number; rarity: string }[] {
+    const drops: { name: string; quantity: number; rarity: string }[] = [];
+
+    for (const entry of loot) {
+      if (Math.random() * 100 >= entry.dropChance) continue;
+      const quantity = entry.minQuantity + Math.floor(Math.random() * (entry.maxQuantity - entry.minQuantity + 1));
+      drops.push({ name: entry.item.name, quantity, rarity: entry.item.rarity });
+    }
+
+    return drops;
   }
 }

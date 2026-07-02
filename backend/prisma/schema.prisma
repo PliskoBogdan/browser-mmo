@@ -30,6 +30,7 @@ model User {
 
   equipment Equipment?
   battles   Battle[]
+  inventory InventoryItem[]
 
   createdAt DateTime @default(now())
 }
@@ -108,6 +109,49 @@ model Monster {
 
   subLocations SubLocationMonster[]
   battles      Battle[]
+  loot         MonsterLoot[]
+}
+
+model Item {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  sellValue   Int
+  rarity      ItemRarity @default(COMMON)
+
+  drops     MonsterLoot[]
+  inventory InventoryItem[]
+}
+
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+}
+
+model MonsterLoot {
+  monsterId   Int
+  itemId      Int
+  dropChance  Int @default(50)
+  minQuantity Int @default(1)
+  maxQuantity Int @default(1)
+
+  monster Monster @relation(fields: [monsterId], references: [id])
+  item    Item    @relation(fields: [itemId], references: [id])
+
+  @@id([monsterId, itemId])
+}
+
+model InventoryItem {
+  id       Int @id @default(autoincrement())
+  userId   Int
+  itemId   Int
+  quantity Int @default(1)
+
+  user User @relation(fields: [userId], references: [id])
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
 }
 
 model SubLocationMonster {

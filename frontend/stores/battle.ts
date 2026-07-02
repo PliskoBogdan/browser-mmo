@@ -33,6 +33,7 @@ export interface AttackResult {
   playerDied: boolean;
   attackCooldownMs: number;
   newPosition?: { x: number; y: number };
+  lootDrops?: { name: string; quantity: number; rarity: 'COMMON' | 'UNCOMMON' | 'RARE' }[];
 }
 
 export const useBattleStore = defineStore('battle', () => {

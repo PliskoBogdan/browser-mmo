@@ -60,6 +60,7 @@ const authStore = useAuthStore();
 const characterStore = useCharacterStore();
 const battleStore = useBattleStore();
 const worldStore = useWorldStore();
+const inventoryStore = useInventoryStore();
 
 const { character } = storeToRefs(characterStore);
 
@@ -79,6 +80,7 @@ async function handleLogout() {
   characterStore.clear();
   battleStore.clear();
   worldStore.clear();
+  inventoryStore.clear();
   await navigateTo("/auth/login");
 }
 </script>

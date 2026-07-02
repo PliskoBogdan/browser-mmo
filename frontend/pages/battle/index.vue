@@ -5,8 +5,13 @@
       Battle
     </div>
 
+    <BattleResult 
+        v-if="lastResult !== null && lastResult.battleStatus === 'WON'"
+        :battleResult="lastResult"
+    />
+
     <!-- No active battle -->
-    <v-card v-if="!battle && !loading" elevation="4" class="text-center pa-8">
+    <v-card v-else-if="!battle && !loading" elevation="4" class="text-center pa-8">
       <v-icon size="64" color="secondary" class="mb-4">mdi-sword-cross</v-icon>
       <div class="text-h6 mb-2">No active battle</div>
       <div class="text-body-2 text-medium-emphasis mb-4">Go to the World map and enter a dangerous zone</div>
@@ -87,18 +92,12 @@
           </v-card-text>
         </v-card>
 
-        <!-- Status result -->
-        <v-alert v-if="battleEndMessage" :type="battleEndType" variant="tonal" class="mb-4">
-          {{ battleEndMessage }}
-        </v-alert>
-
         <!-- Actions -->
         <div class="d-flex gap-3">
           <v-btn
             color="primary"
             size="large"
             prepend-icon="mdi-sword"
-            :disabled="!canAttack || !!battleEndMessage"
             :loading="attacking"
             @click="handleAttack"
           >
@@ -113,7 +112,6 @@
             size="large"
             variant="tonal"
             prepend-icon="mdi-run"
-            :disabled="!!battleEndMessage"
             :loading="fleeing"
             @click="handleFlee"
           >
@@ -135,7 +133,6 @@ const { battle, lastResult, canAttack, cooldownRemaining } = storeToRefs(battleS
 const loading = ref(false);
 const attacking = ref(false);
 const fleeing = ref(false);
-const battleEndMessage = ref('');
 const battleEndType = ref<'success' | 'error' | 'warning'>('success');
 
 const playerHp = computed(() => lastResult.value?.playerCurrentHp ?? characterStore.character?.hp);
@@ -177,11 +174,9 @@ async function handleAttack() {
 
     if (result.battleStatus === 'WON') {
       battleEndType.value = 'success';
-      battleEndMessage.value = `Victory! You defeated the monster and gained ${result.expGained} EXP and ${result.goldGained} Gold.${result.leveledUp ? ' Level Up!' : ''}`;
       await characterStore.fetch();
     } else if (result.battleStatus === 'LOST' || result.playerDied) {
       battleEndType.value = 'error';
-      battleEndMessage.value = 'You have been defeated...';
       await characterStore.fetch();
     }
   } catch (e: any) {
@@ -196,7 +191,6 @@ async function handleFlee() {
   try {
     const result = await battleStore.flee();
     battleEndType.value = 'warning';
-    battleEndMessage.value = `${result.message} You lost ${result.hpLost} HP.`;
     await characterStore.fetch();
   } finally {
     fleeing.value = false;

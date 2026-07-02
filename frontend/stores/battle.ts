@@ -17,6 +17,8 @@ export interface ActiveBattle {
   startedAt?: string;
 }
 
+export type BattleStatus = 'ACTIVE' | 'WON' | 'LOST' | 'FLED';
+
 export interface AttackResult {
   playerDamageDealt: number;
   monsterDamageDealt: number;
@@ -24,7 +26,7 @@ export interface AttackResult {
   monsterMaxHp: number;
   playerCurrentHp: number;
   playerMaxHp: number;
-  battleStatus: 'ACTIVE' | 'WON' | 'LOST' | 'FLED';
+  battleStatus: BattleStatus;
   expGained: number;
   goldGained: number;
   leveledUp: boolean;

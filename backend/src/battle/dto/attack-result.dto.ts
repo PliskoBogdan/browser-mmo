@@ -1,6 +1,8 @@
 import { BattleStatus } from '../../../prisma/generated/client/enums';
+import type { BattleStateView, CombatEventView } from '@my/shared';
 
 export class AttackResultDto {
+  skillUsed: string;
   playerDamageDealt: number;
   monsterDamageDealt: number;
   monsterCurrentHp: number;
@@ -10,6 +12,10 @@ export class AttackResultDto {
   battleStatus: BattleStatus;
   isCrit: boolean;
   evaded: number;
+  // Ordered log of everything that happened this action (ticks, procs, DoTs).
+  events: CombatEventView[];
+  // Snapshot of momentum/statuses/intent/skills; null once the battle ended.
+  state: BattleStateView | null;
   expGained: number;
   goldGained: number;
   leveledUp: boolean;
@@ -35,5 +41,6 @@ export class EnterBattleResultDto {
       attackSpeed: number;
     };
     attackCooldownMs: number;
+    state: BattleStateView;
   };
 }

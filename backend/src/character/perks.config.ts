@@ -47,6 +47,83 @@ export const PERK_DEFINITIONS: PerkDefinition[] = [
     requiredLevel: 9,
     effect: { stats: { endurance: 10 }, healthRegenBonus: 0.1 },
   },
+
+  // --- Reactive perks (combat triggers) ---
+  // These do nothing to base stats; they hook into combat events and are
+  // resolved by the battle engine (battle/engine/engine.ts).
+  {
+    code: 'riposte',
+    name: 'Riposte',
+    description: 'After evading an attack, your next strike deals +50% damage.',
+    requiredLevel: 3,
+    effect: {},
+    triggers: [
+      {
+        id: 'perk_riposte',
+        on: 'PLAYER_EVADE',
+        effects: [{ type: 'APPLY_STATUS', target: 'PLAYER', status: 'riposte', stacks: 1, ticks: -1 }],
+      },
+    ],
+  },
+  {
+    code: 'bloodletter',
+    name: 'Bloodletter',
+    description: 'Critical hits have a 40% chance to inflict Bleeding (2 stacks).',
+    requiredLevel: 6,
+    effect: {},
+    triggers: [
+      {
+        id: 'perk_bloodletter',
+        on: 'PLAYER_CRIT',
+        chance: 0.4,
+        effects: [{ type: 'APPLY_STATUS', target: 'MONSTER', status: 'bleed', stacks: 2, ticks: 3 }],
+      },
+    ],
+  },
+  {
+    code: 'combat_flow',
+    name: 'Combat Flow',
+    description: 'Every 3rd landed hit grants +1 momentum.',
+    requiredLevel: 6,
+    effect: {},
+    triggers: [
+      {
+        id: 'perk_combat_flow',
+        on: 'PLAYER_HIT',
+        everyNth: 3,
+        effects: [{ type: 'GAIN_MOMENTUM', amount: 1 }],
+      },
+    ],
+  },
+  {
+    code: 'bloodlust',
+    name: 'Bloodlust',
+    description: 'Slaying a monster restores 10% of your max HP.',
+    requiredLevel: 9,
+    effect: {},
+    triggers: [
+      {
+        id: 'perk_bloodlust',
+        on: 'MONSTER_KILLED',
+        effects: [{ type: 'HEAL_PLAYER', percentOfMax: 10 }],
+      },
+    ],
+  },
+  {
+    code: 'second_wind',
+    name: 'Second Wind',
+    description: 'Once per battle, dropping below 30% HP instantly restores 15% of your max HP.',
+    requiredLevel: 12,
+    effect: {},
+    triggers: [
+      {
+        id: 'perk_second_wind',
+        on: 'PLAYER_HP_BELOW_30',
+        oncePerBattle: true,
+        effects: [{ type: 'HEAL_PLAYER', percentOfMax: 15 }],
+      },
+    ],
+  },
 ];
 
 export const PERK_BY_CODE = new Map(PERK_DEFINITIONS.map((p) => [p.code, p]));

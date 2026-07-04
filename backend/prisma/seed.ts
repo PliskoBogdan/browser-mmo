@@ -46,9 +46,10 @@ async function main() {
   // --- Monsters ---
   const strayDog = await prisma.monster.upsert({
     where: { id: 1 },
-    update: { attackSpeed: 0.4, defense: 0 },
+    update: { attackSpeed: 0.4, defense: 0, aiProfile: 'feral' },
     create: {
       name: 'Stray Dog',
+      aiProfile: 'feral',
       maxHp: 30,
       damage: 5,
       defense: 0,
@@ -60,9 +61,10 @@ async function main() {
 
   const bandit = await prisma.monster.upsert({
     where: { id: 2 },
-    update: { attackSpeed: 0.5, defense: 5 },
+    update: { attackSpeed: 0.5, defense: 5, aiProfile: 'cunning' },
     create: {
       name: 'Bandit',
+      aiProfile: 'cunning',
       maxHp: 60,
       damage: 12,
       defense: 5,
@@ -74,9 +76,10 @@ async function main() {
 
   const wolf = await prisma.monster.upsert({
     where: { id: 3 },
-    update: { attackSpeed: 0.9, defense: 8 },
+    update: { attackSpeed: 0.9, defense: 8, aiProfile: 'feral' },
     create: {
       name: 'Wolf',
+      aiProfile: 'feral',
       maxHp: 80,
       damage: 18,
       defense: 8,
@@ -88,9 +91,10 @@ async function main() {
 
   const ghoul = await prisma.monster.upsert({
     where: { id: 4 },
-    update: { attackSpeed: 0.6, defense: 15 },
+    update: { attackSpeed: 0.6, defense: 15, aiProfile: 'venomous' },
     create: {
       name: 'Ghoul',
+      aiProfile: 'venomous',
       maxHp: 120,
       damage: 25,
       defense: 15,
@@ -102,9 +106,10 @@ async function main() {
 
   const mutant = await prisma.monster.upsert({
     where: { id: 5 },
-    update: { attackSpeed: 0.5, defense: 25 },
+    update: { attackSpeed: 0.5, defense: 25, aiProfile: 'venomous' },
     create: {
       name: 'Mutant',
+      aiProfile: 'venomous',
       maxHp: 200,
       damage: 40,
       defense: 25,

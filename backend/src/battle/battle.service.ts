@@ -2,14 +2,22 @@ import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Inj
 import { PrismaService } from '../prisma/prisma.service';
 import { LocationService } from '../location/location.service';
 import { BattleStatus, SubLocationKind } from '../../prisma/generated/client/enums';
+import { Prisma } from '../../prisma/generated/client/client';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
-import { CharacterStatsService, STATS_INCLUDE, STAT_POINTS_PER_LEVEL } from '../character/character-stats.service';
-import { perkPointsForLevel } from '../character/perks.config';
+import { CharacterProfile, CharacterStatsService, STATS_INCLUDE, STAT_POINTS_PER_LEVEL } from '../character/character-stats.service';
+import { PERK_BY_CODE, perkPointsForLevel } from '../character/perks.config';
+import { CombatResolver, createInitialState } from './engine/engine';
+import { SKILL_BY_CODE } from './engine/skills.config';
+import { resolveAiProfile } from './engine/monster-ai.config';
+import { buildStateView } from './engine/views';
+import type { BattleRuntimeState, EngineContext } from './engine/types';
 
 const EXP_PER_LEVEL_MULTIPLIER = 100;
 // Guard against pathological loops if a player leaves a battle idle for a very
 // long time before their next attack.
 const MAX_MONSTER_TICKS = 1000;
+
+type MonsterRow = { name: string; maxHp: number; damage: number; defense: number; attackSpeed: number; aiProfile: string | null };
 
 @Injectable()
 export class BattleService {
@@ -54,14 +62,18 @@ export class BattleService {
     });
 
     if (existingBattle && existingBattle.status === BattleStatus.ACTIVE) {
+      const ctx = this.buildEngineContext(profile, existingBattle.monster, user.perks);
+      const state = await this.loadState(existingBattle.id, existingBattle.state, ctx);
       return {
         message: 'You are already in a battle!',
         isSafe: false,
-        battle: this.battleView(existingBattle.id, existingBattle.monster, existingBattle.monsterCurrentHp, attackCooldownMs),
+        battle: this.battleView(existingBattle.id, existingBattle.monster, existingBattle.monsterCurrentHp, attackCooldownMs, ctx, state),
       };
     }
 
     const spawnedMonster = this.pickMonsterByWeight(subLocation.monsters);
+    const ctx = this.buildEngineContext(profile, spawnedMonster.monster, user.perks);
+    const state = createInitialState(ctx);
 
     const battle = await this.prisma.battle.create({
       data: {
@@ -70,6 +82,7 @@ export class BattleService {
         subLocationId,
         monsterCurrentHp: spawnedMonster.monster.maxHp,
         lastMonsterAttackAt: new Date(),
+        state: state as unknown as Prisma.InputJsonValue,
       },
       include: { monster: true },
     });
@@ -77,11 +90,19 @@ export class BattleService {
     return {
       message: `You encountered a ${battle.monster.name}!`,
       isSafe: false,
-      battle: this.battleView(battle.id, battle.monster, battle.monsterCurrentHp, attackCooldownMs),
+      battle: this.battleView(battle.id, battle.monster, battle.monsterCurrentHp, attackCooldownMs, ctx, state),
     };
   }
 
-  async attack(userId: number): Promise<AttackResultDto> {
+  // Backwards-compatible basic attack.
+  attack(userId: number): Promise<AttackResultDto> {
+    return this.action(userId, 'strike');
+  }
+
+  async action(userId: number, skillCode: string): Promise<AttackResultDto> {
+    const skill = SKILL_BY_CODE.get(skillCode);
+    if (!skill) throw new BadRequestException(`Unknown skill: ${skillCode}`);
+
     const [battle, user] = await Promise.all([
       this.prisma.battle.findFirst({
         where: { userId, status: BattleStatus.ACTIVE },
@@ -106,7 +127,7 @@ export class BattleService {
     const monster = battle.monster;
     const attackCooldownMs = profile.combat.attackCooldownMs;
 
-    // --- Anti-cheat: enforce attack cooldown ---
+    // --- Anti-cheat: enforce the global weapon cooldown between actions ---
     if (battle.lastPlayerAttackAt) {
       const elapsed = now.getTime() - battle.lastPlayerAttackAt.getTime();
       if (elapsed < attackCooldownMs) {
@@ -114,30 +135,36 @@ export class BattleService {
       }
     }
 
-    // --- Monster attacks accumulated since last check (evasion + player defense) ---
-    const monsterIntervalMs = Math.round((1 / monster.attackSpeed) * 1000);
-    const rawTicks = Math.floor((now.getTime() - battle.lastMonsterAttackAt.getTime()) / monsterIntervalMs);
-    const playerDefReduction = CharacterStatsService.damageReduction(profile.final.defense);
-    const perTickDamage = Math.max(1, Math.round(monster.damage * (1 - playerDefReduction)));
+    const ctx = this.buildEngineContext(profile, monster, user.perks);
+    const state = (battle.state as unknown as BattleRuntimeState | null) ?? createInitialState(ctx);
 
-    let monsterDamageDealt = 0;
-    let evaded = 0;
-    const ticks = Math.min(rawTicks, MAX_MONSTER_TICKS);
-    for (let i = 0; i < ticks; i++) {
-      if (Math.random() < profile.combat.evasionChance) evaded++;
-      else monsterDamageDealt += perTickDamage;
+    // --- Per-skill cooldown and momentum cost ---
+    const readyAt = state.skillReadyAt[skill.code] ?? 0;
+    if (now.getTime() < readyAt) {
+      throw new HttpException({ message: `${skill.name} is on cooldown`, remainingMs: readyAt - now.getTime() }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (state.momentum < skill.momentumCost) {
+      throw new BadRequestException(`${skill.name} needs ${skill.momentumCost} momentum (you have ${state.momentum}).`);
     }
 
-    let playerCurrentHp = Math.max(0, user.hp - monsterDamageDealt);
-    const playerDied = playerCurrentHp <= 0;
+    // --- Replay the monster ticks accumulated since the last action ---
+    const monsterIntervalMs = Math.round((1 / monster.attackSpeed) * 1000);
+    const rawTicks = Math.floor((now.getTime() - battle.lastMonsterAttackAt.getTime()) / monsterIntervalMs);
+    const ticks = Math.min(rawTicks, MAX_MONSTER_TICKS);
 
-    // --- Player attacks monster (crit chance + crit multiplier + enemy defense) ---
-    const isCrit = Math.random() < profile.combat.critChance;
-    const monsterDefReduction = CharacterStatsService.damageReduction(monster.defense);
-    const rawDamage = profile.combat.attackDamage * (isCrit ? profile.combat.critMultiplier : 1);
-    const playerDamageDealt = Math.max(1, Math.round(rawDamage * (1 - monsterDefReduction)));
-    const newMonsterHp = Math.max(0, battle.monsterCurrentHp - playerDamageDealt);
-    const monsterDied = newMonsterHp <= 0;
+    const resolver = new CombatResolver(ctx, state, user.hp, battle.monsterCurrentHp);
+    resolver.resolveMonsterTicks(ticks);
+
+    // The skill only fires if the replayed ticks didn't already end the fight.
+    if (!resolver.playerDied && !resolver.monsterDied) {
+      resolver.resolveSkill(skill);
+      state.skillReadyAt[skill.code] = now.getTime() + Math.round(attackCooldownMs * skill.cooldownMult);
+    }
+
+    const monsterDied = resolver.monsterDied;
+    const playerDied = resolver.playerDied;
+    let playerCurrentHp = resolver.playerHp;
+    const newMonsterHp = resolver.monsterHp;
 
     // Advance the monster's attack timer by the ticks that actually elapsed.
     const newLastMonsterAttackAt = rawTicks > 0 ? new Date(battle.lastMonsterAttackAt.getTime() + rawTicks * monsterIntervalMs) : battle.lastMonsterAttackAt;
@@ -202,9 +229,14 @@ export class BattleService {
       } else {
         await tx.battle.update({
           where: { id: battle.id },
-          data: { monsterCurrentHp: newMonsterHp, lastPlayerAttackAt: now, lastMonsterAttackAt: newLastMonsterAttackAt },
+          data: {
+            monsterCurrentHp: newMonsterHp,
+            lastPlayerAttackAt: now,
+            lastMonsterAttackAt: newLastMonsterAttackAt,
+            state: state as unknown as Prisma.InputJsonValue,
+          },
         });
-        if (monsterDamageDealt > 0) {
+        if (playerCurrentHp !== user.hp) {
           await tx.user.update({ where: { id: userId }, data: { hp: playerCurrentHp } });
         }
       }
@@ -213,15 +245,18 @@ export class BattleService {
     const finalStatus = monsterDied ? BattleStatus.WON : playerDied ? BattleStatus.LOST : BattleStatus.ACTIVE;
 
     return {
-      playerDamageDealt,
-      monsterDamageDealt,
+      skillUsed: skill.code,
+      playerDamageDealt: resolver.totalPlayerDamage,
+      monsterDamageDealt: resolver.totalMonsterDamage,
       monsterCurrentHp: monsterDied ? 0 : newMonsterHp,
       monsterMaxHp: monster.maxHp,
       playerCurrentHp: playerDied ? 0 : playerCurrentHp,
       playerMaxHp: profile.combat.maxHp,
       battleStatus: finalStatus,
-      isCrit,
-      evaded,
+      isCrit: resolver.lastHitWasCrit,
+      evaded: resolver.evaded,
+      events: resolver.events,
+      state: finalStatus === BattleStatus.ACTIVE ? buildStateView(ctx, state, now.getTime()) : null,
       expGained,
       goldGained,
       leveledUp,
@@ -265,14 +300,18 @@ export class BattleService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: STATS_INCLUDE });
-    const profile = user ? this.stats.computeProfile(user) : null;
-    const attackCooldownMs = profile?.combat.attackCooldownMs ?? 0;
+    if (!user) return { activeBattle: null };
+    const profile = this.stats.computeProfile(user);
+    const attackCooldownMs = profile.combat.attackCooldownMs ?? 0;
+
+    const ctx = this.buildEngineContext(profile, battle.monster, user.perks);
+    const state = await this.loadState(battle.id, battle.state, ctx);
 
     // Estimated pending monster damage after player defense (no evasion RNG here).
     const now = new Date();
     const monsterIntervalMs = Math.round((1 / battle.monster.attackSpeed) * 1000);
     const pendingTicks = Math.floor((now.getTime() - battle.lastMonsterAttackAt.getTime()) / monsterIntervalMs);
-    const defReduction = profile ? CharacterStatsService.damageReduction(profile.final.defense) : 0;
+    const defReduction = CharacterStatsService.damageReduction(profile.final.defense);
     const pendingMonsterDamage = pendingTicks * Math.max(1, Math.round(battle.monster.damage * (1 - defReduction)));
 
     return {
@@ -291,26 +330,56 @@ export class BattleService {
         pendingMonsterDamage,
         attackCooldownMs,
         startedAt: battle.createdAt,
+        state: buildStateView(ctx, state, now.getTime()),
       },
     };
   }
 
   // --- Helpers ---
 
+  private buildEngineContext(profile: CharacterProfile, monster: MonsterRow, perks: { perkCode: string }[]): EngineContext {
+    const playerTriggers = perks.flatMap(({ perkCode }) => PERK_BY_CODE.get(perkCode)?.triggers ?? []);
+    return {
+      player: { combat: profile.combat, defense: profile.final.defense },
+      monster: {
+        name: monster.name,
+        maxHp: monster.maxHp,
+        damage: monster.damage,
+        defense: monster.defense,
+        attackSpeed: monster.attackSpeed,
+      },
+      playerTriggers,
+      monsterAi: resolveAiProfile(monster.aiProfile),
+      rng: Math.random,
+    };
+  }
+
+  // Battles created before the engine existed have no state — initialize and
+  // persist one so intents/cooldowns stay stable across requests.
+  private async loadState(battleId: number, raw: unknown, ctx: EngineContext): Promise<BattleRuntimeState> {
+    if (raw) return raw as BattleRuntimeState;
+    const state = createInitialState(ctx);
+    await this.prisma.battle.update({ where: { id: battleId }, data: { state: state as unknown as Prisma.InputJsonValue } });
+    return state;
+  }
+
   private battleView(
     id: number,
     monster: { id: number; name: string; maxHp: number; damage: number; attackSpeed: number },
     currentHp: number,
     attackCooldownMs: number,
+    ctx: EngineContext,
+    state: BattleRuntimeState,
   ) {
     return {
       id,
       monster: { id: monster.id, name: monster.name, maxHp: monster.maxHp, currentHp, damage: monster.damage, attackSpeed: monster.attackSpeed },
       attackCooldownMs,
+      state: buildStateView(ctx, state, Date.now()),
     };
   }
 
-  private pickMonsterByWeight(entries: { monster: { id: number; maxHp: number }; spawnWeight: number }[]) {
+  private pickMonsterByWeight<T extends { monster: { id: number; maxHp: number }; spawnWeight: number }>(entries: T[]): T {
     const totalWeight = entries.reduce((sum, e) => sum + e.spawnWeight, 0);
     let roll = Math.random() * totalWeight;
     for (const entry of entries) {

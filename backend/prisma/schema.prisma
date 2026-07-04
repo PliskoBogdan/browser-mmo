@@ -157,6 +157,10 @@ model Monster {
   expReward   Int
   goldReward  Int
 
+  // Key into MONSTER_AI_PROFILES (battle/engine/monster-ai.config.ts):
+  // intent weights + reactive triggers. Null = plain attacker.
+  aiProfile String?
+
   subLocations SubLocationMonster[]
   battles      Battle[]
   loot         MonsterLoot[]
@@ -227,6 +231,10 @@ model Battle {
   monsterCurrentHp    Int
   lastPlayerAttackAt  DateTime?
   lastMonsterAttackAt DateTime  @default(now())
+
+  // Dynamic combat state (momentum, statuses, intent, skill cooldowns,
+  // trigger counters) owned by the battle engine. Shape: engine/types.ts.
+  state Json?
 
   status BattleStatus @default(ACTIVE)
 

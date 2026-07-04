@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CombatProfile, CoreStat, StatBlock, StatBreakdownBlock } from '@my/shared';
 import { CORE_STATS } from './stats.constants';
+import { damageReduction } from './stats.formulas';
 import { PERK_BY_CODE } from './perks.config';
 
 // --- Tunable game constants (single source of truth per the spec) ---
@@ -14,7 +15,6 @@ const STRENGTH_DAMAGE_MULT = 0.5;
 
 const MAX_EVASION = 0.6;
 const MAX_CRIT_CHANCE = 0.75;
-const MAX_DAMAGE_REDUCTION = 0.7;
 
 // How often (ms) one health-regeneration cycle elapses for lazy regen.
 export const REGEN_INTERVAL_MS = 10_000;
@@ -140,8 +140,7 @@ export class CharacterStatsService {
 
   // Fraction of incoming damage removed by a given defense value (0..0.7).
   static damageReduction(defense: number): number {
-    const d = Math.max(0, defense);
-    return Math.min(MAX_DAMAGE_REDUCTION, d / (d + 100));
+    return damageReduction(defense);
   }
 
   private zeroBlock(): StatBlock {

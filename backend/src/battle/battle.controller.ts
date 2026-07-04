@@ -1,5 +1,6 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { BattleService } from './battle.service';
+import { BattleActionDto } from './dto/battle-action.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from 'express';
 
@@ -18,10 +19,17 @@ export class BattleController {
     return this.battleService.enterSubLocation(req.user.userId, subLocationId);
   }
 
+  // Legacy basic attack; equivalent to action { skill: 'strike' }.
   @Post('attack')
   @HttpCode(HttpStatus.OK)
   attack(@Req() req: AuthenticatedRequest) {
     return this.battleService.attack(req.user.userId);
+  }
+
+  @Post('action')
+  @HttpCode(HttpStatus.OK)
+  action(@Req() req: AuthenticatedRequest, @Body() dto: BattleActionDto) {
+    return this.battleService.action(req.user.userId, dto.skill);
   }
 
   @Post('flee')

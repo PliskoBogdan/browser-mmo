@@ -48,6 +48,9 @@ export interface PerkDefinition {
   description: string;
   requiredLevel: number;
   effect: PerkEffect;
+  // Reactive combat behaviour (see battle.interface.ts). A perk may have flat
+  // stat bonuses, triggers, or both.
+  triggers?: import('./battle.interface').CombatTriggerDef[];
 }
 
 export interface PerkView extends PerkDefinition {

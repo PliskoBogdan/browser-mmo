@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRegistrationPayload } from '@my/shared';
 
 @Injectable()
 export class UsersService {
@@ -31,11 +30,7 @@ export class UsersService {
     });
   }
 
-  create(
-    data: UserRegistrationPayload & {
-      equipment?: { create: { primaryWeaponId: number } };
-    },
-  ) {
+  create(data: { email: string; username: string; password: string }) {
     return this.prisma.user.create({ data });
   }
 }

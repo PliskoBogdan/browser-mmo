@@ -21,40 +21,89 @@ model User {
   hp    Int @default(100)
   maxHp Int @default(100)
 
-  isDead Boolean @default(false)
+  // Base character stats (progression + manual upgrades). Equipment/perk
+  // bonuses are layered on top at read time — never written back here.
+  strength       Int @default(5)
+  agility        Int @default(5)
+  accuracy       Int @default(5)
+  endurance      Int @default(5)
+  criticalDamage Int @default(150) // percent multiplier: 150 => crits deal 150%
+  defense        Int @default(0)
+
+  statPoints Int @default(0)
+  perkPoints Int @default(0)
+
+  isDead      Boolean  @default(false)
+  hpUpdatedAt DateTime @default(now()) // anchor for lazy HP regeneration
 
   currentLocationId Int?
   currentLocation   Location? @relation(fields: [currentLocationId], references: [id])
   posX              Int       @default(1)
   posY              Int       @default(2)
 
-  equipment Equipment?
-  battles   Battle[]
-  inventory InventoryItem[]
+  ownedEquipment UserEquipment[]
+  perks          UserPerk[]
+  battles        Battle[]
+  inventory      InventoryItem[]
 
   createdAt DateTime @default(now())
 }
 
-model Equipment {
-  id     Int  @id @default(autoincrement())
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id])
-
-  primaryWeaponId   Int?
-  primaryWeapon     Weapon? @relation("PrimaryWeapon", fields: [primaryWeaponId], references: [id])
-
-  secondaryWeaponId Int?
-  secondaryWeapon   Weapon? @relation("SecondaryWeapon", fields: [secondaryWeaponId], references: [id])
+enum EquipmentSlot {
+  WEAPON
+  HELMET
+  BODY
+  PANTS
+  GLOVES
 }
 
-model Weapon {
-  id          Int    @id @default(autoincrement())
-  name        String @unique
-  damage      Int
-  attackSpeed Float
+// A piece of gear that can occupy an equipment slot. Stat modifiers are stored
+// as explicit columns (may be positive or negative). Weapon-only combat fields
+// (baseDamage/attackSpeed) are null for armor.
+model EquipmentItem {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique
+  slot        EquipmentSlot
+  rarity      ItemRarity    @default(COMMON)
+  description String?
+  sellValue   Int           @default(0)
 
-  primaryEquipments   Equipment[] @relation("PrimaryWeapon")
-  secondaryEquipments Equipment[] @relation("SecondaryWeapon")
+  strength       Int @default(0)
+  agility        Int @default(0)
+  accuracy       Int @default(0)
+  endurance      Int @default(0)
+  criticalDamage Int @default(0)
+  defense        Int @default(0)
+
+  baseDamage  Int   @default(0) // weapon contribution to attack damage
+  attackSpeed Float? // weapon only; null for armor
+
+  owners UserEquipment[]
+}
+
+// Gear a player owns; `equipped` marks it as active in its slot. At most one
+// equipped item per slot is enforced in the service layer.
+model UserEquipment {
+  id              Int     @id @default(autoincrement())
+  userId          Int
+  equipmentItemId Int
+  equipped        Boolean @default(false)
+
+  user          User          @relation(fields: [userId], references: [id])
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+
+  @@index([userId])
+}
+
+// Perks are defined in code (perks.config.ts); this table records which a
+// player has unlocked. perkCode references a PerkDefinition id.
+model UserPerk {
+  userId   Int
+  perkCode String
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, perkCode])
 }
 
 model Location {
@@ -103,6 +152,7 @@ model Monster {
   name        String
   maxHp       Int
   damage      Int
+  defense     Int    @default(0)
   attackSpeed Float
   expReward   Int
   goldReward  Int

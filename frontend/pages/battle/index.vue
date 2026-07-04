@@ -80,9 +80,13 @@
         <v-card v-if="lastResult" elevation="2" variant="tonal" class="mb-4" :color="resultColor">
           <v-card-text class="pa-3">
             <div class="text-body-2">
-              <span class="font-weight-bold text-error">You dealt {{ lastResult.playerDamageDealt }} dmg</span>
+              <span class="font-weight-bold text-error">
+                You dealt {{ lastResult.playerDamageDealt }} dmg
+                <span v-if="lastResult.isCrit" class="text-warning">CRIT!</span>
+              </span>
               <span class="mx-2 text-medium-emphasis">·</span>
               <span class="font-weight-bold text-warning">Monster dealt {{ lastResult.monsterDamageDealt }} dmg</span>
+              <span v-if="lastResult.evaded" class="text-info ml-2">Evaded {{ lastResult.evaded }}x</span>
             </div>
             <div v-if="lastResult.expGained || lastResult.goldGained" class="text-body-2 mt-1">
               <span v-if="lastResult.expGained" class="text-info mr-2">+{{ lastResult.expGained }} EXP</span>

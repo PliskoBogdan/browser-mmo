@@ -36,7 +36,13 @@ const props = defineProps<{
 
 const battleResultMessage = computed<string>(() => {
   if (props.battleResult.battleStatus === "WON") {
-    return `Victory! You defeated the monster and gained ${props.battleResult.expGained} EXP and ${props.battleResult.goldGained} Gold.${props.battleResult.leveledUp ? " Level Up!" : ""}`;
+    let msg = `Victory! You defeated the monster and gained ${props.battleResult.expGained} EXP and ${props.battleResult.goldGained} Gold.`;
+    if (props.battleResult.leveledUp) {
+      msg += " Level Up!";
+      if (props.battleResult.statPointsGained) msg += ` +${props.battleResult.statPointsGained} stat points.`;
+      if (props.battleResult.perkPointsGained) msg += ` +${props.battleResult.perkPointsGained} perk point.`;
+    }
+    return msg;
   }
 
   if (

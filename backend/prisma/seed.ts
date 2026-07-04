@@ -7,35 +7,51 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // --- Weapons ---
-  const pistol = await prisma.weapon.upsert({
-    where: { name: 'Pistol' },
-    update: { attackSpeed: 1.5 },
-    create: { name: 'Pistol', damage: 15, attackSpeed: 1.5 },
-  });
+  // --- Equipment (weapons + armor) ---
+  const equipment: {
+    name: string;
+    slot: 'WEAPON' | 'HELMET' | 'BODY' | 'PANTS' | 'GLOVES';
+    rarity?: 'COMMON' | 'UNCOMMON' | 'RARE';
+    description?: string;
+    sellValue?: number;
+    baseDamage?: number;
+    attackSpeed?: number;
+    strength?: number;
+    agility?: number;
+    accuracy?: number;
+    endurance?: number;
+    criticalDamage?: number;
+    defense?: number;
+  }[] = [
+    // Weapons: baseDamage + attackSpeed drive combat; may also carry stat mods.
+    { name: 'Pistol', slot: 'WEAPON', description: 'A reliable sidearm. Balanced and quick.', baseDamage: 15, attackSpeed: 1.5, accuracy: 2, sellValue: 10 },
+    { name: 'Shotgun', slot: 'WEAPON', rarity: 'UNCOMMON', description: 'Slow but hits like a truck.', baseDamage: 35, attackSpeed: 0.6, strength: 3, criticalDamage: 15, sellValue: 30 },
+    { name: 'SMG', slot: 'WEAPON', description: 'Sprays fast, low damage per shot.', baseDamage: 10, attackSpeed: 2, agility: 2, sellValue: 20 },
+    // Starter armor set (names must match STARTING_ARMOR_NAMES in auth.service).
+    { name: 'Scout Helmet', slot: 'HELMET', description: 'A dented but serviceable helmet.', defense: 4, accuracy: 2, sellValue: 8 },
+    { name: 'Basic Body Armor', slot: 'BODY', description: 'A simple protective vest.', defense: 10, strength: 5, agility: -1, sellValue: 12 },
+    { name: 'Lightweight Pants', slot: 'PANTS', description: 'Padded, flexible trousers.', agility: 4, endurance: 2, defense: 2, sellValue: 8 },
+    { name: 'Combat Gloves', slot: 'GLOVES', description: 'Grip-enhancing tactical gloves.', accuracy: 4, criticalDamage: 5, sellValue: 8 },
+    // Rarer finds to chase.
+    { name: 'Reinforced Helmet', slot: 'HELMET', rarity: 'UNCOMMON', description: 'Heavy plating for the head.', defense: 12, endurance: 3, agility: -2, sellValue: 40 },
+    { name: 'Kevlar Vest', slot: 'BODY', rarity: 'RARE', description: 'Pre-war military body armor.', defense: 25, strength: 8, agility: -3, sellValue: 90 },
+  ];
 
-  const shotgun = await prisma.weapon.upsert({
-    where: { name: 'Shotgun' },
-    update: { attackSpeed: 0.6 },
-    create: { name: 'Shotgun', damage: 35, attackSpeed: 0.6 },
-  });
+  for (const e of equipment) {
+    await prisma.equipmentItem.upsert({ where: { name: e.name }, update: e, create: e });
+  }
 
-  const smg = await prisma.weapon.upsert({
-    where: { name: 'SMG' },
-    update: { attackSpeed: 2 },
-    create: { name: 'SMG', damage: 10, attackSpeed: 2 },
-  });
-
-  console.log(`Weapons seeded: ${pistol.name}, ${shotgun.name}, ${smg.name}`);
+  console.log(`Equipment seeded: ${equipment.map((e) => e.name).join(', ')}`);
 
   // --- Monsters ---
   const strayDog = await prisma.monster.upsert({
     where: { id: 1 },
-    update: { attackSpeed: 0.4 },
+    update: { attackSpeed: 0.4, defense: 0 },
     create: {
       name: 'Stray Dog',
       maxHp: 30,
       damage: 5,
+      defense: 0,
       attackSpeed: 0.4,
       expReward: 10,
       goldReward: 5,
@@ -44,11 +60,12 @@ async function main() {
 
   const bandit = await prisma.monster.upsert({
     where: { id: 2 },
-    update: { attackSpeed: 0.5 },
+    update: { attackSpeed: 0.5, defense: 5 },
     create: {
       name: 'Bandit',
       maxHp: 60,
       damage: 12,
+      defense: 5,
       attackSpeed: 0.5,
       expReward: 25,
       goldReward: 15,
@@ -57,11 +74,12 @@ async function main() {
 
   const wolf = await prisma.monster.upsert({
     where: { id: 3 },
-    update: { attackSpeed: 0.9 },
+    update: { attackSpeed: 0.9, defense: 8 },
     create: {
       name: 'Wolf',
       maxHp: 80,
       damage: 18,
+      defense: 8,
       attackSpeed: 0.9,
       expReward: 40,
       goldReward: 20,
@@ -70,11 +88,12 @@ async function main() {
 
   const ghoul = await prisma.monster.upsert({
     where: { id: 4 },
-    update: { attackSpeed: 0.6 },
+    update: { attackSpeed: 0.6, defense: 15 },
     create: {
       name: 'Ghoul',
       maxHp: 120,
       damage: 25,
+      defense: 15,
       attackSpeed: 0.6,
       expReward: 70,
       goldReward: 35,
@@ -83,11 +102,12 @@ async function main() {
 
   const mutant = await prisma.monster.upsert({
     where: { id: 5 },
-    update: { attackSpeed: 0.5 },
+    update: { attackSpeed: 0.5, defense: 25 },
     create: {
       name: 'Mutant',
       maxHp: 200,
       damage: 40,
+      defense: 25,
       attackSpeed: 0.5,
       expReward: 120,
       goldReward: 60,

@@ -8,9 +8,13 @@ export class AttackResultDto {
   playerCurrentHp: number;
   playerMaxHp: number;
   battleStatus: BattleStatus;
+  isCrit: boolean;
+  evaded: number;
   expGained: number;
   goldGained: number;
   leveledUp: boolean;
+  statPointsGained: number;
+  perkPointsGained: number;
   playerDied: boolean;
   attackCooldownMs: number;
   newPosition?: { x: number; y: number };

@@ -3,8 +3,10 @@ import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { CharacterService } from '../character/character.service';
 
 const STARTING_WEAPON_NAME = 'Pistol';
+const STARTING_ARMOR_NAMES = ['Scout Helmet', 'Basic Body Armor', 'Lightweight Pants', 'Combat Gloves'];
 
 @Injectable()
 export class AuthService {
@@ -12,6 +14,7 @@ export class AuthService {
     private users: UsersService,
     private jwt: JwtService,
     private prisma: PrismaService,
+    private character: CharacterService,
   ) {}
 
   async register(email: string, username: string, password: string): Promise<string> {
@@ -21,17 +24,20 @@ export class AuthService {
 
     const hash = await bcrypt.hash(password, 10);
 
-    // Находим стартовое оружие (Pistol должен быть в БД после seed)
-    const startingWeapon = await this.prisma.weapon.findUnique({
-      where: { name: STARTING_WEAPON_NAME },
-    });
+    const user = await this.users.create({ email, username, password: hash });
 
-    const user = await this.users.create({
-      email,
-      username,
-      password: hash,
-      ...(startingWeapon ? { equipment: { create: { primaryWeaponId: startingWeapon.id } } } : {}),
+    // Grant and auto-equip starter gear (seeded items). The weapon is equipped
+    // so the character can fight immediately; armor gives a small stat head start.
+    const starterItems = await this.prisma.equipmentItem.findMany({
+      where: { name: { in: [STARTING_WEAPON_NAME, ...STARTING_ARMOR_NAMES] } },
     });
+    if (starterItems.length > 0) {
+      await this.prisma.userEquipment.createMany({
+        data: starterItems.map((item) => ({ userId: user.id, equipmentItemId: item.id, equipped: true })),
+      });
+      // Base strength drives maxHp, but starter armor may boost it too — sync it.
+      await this.character.syncMaxHp(user.id);
+    }
 
     return this.signToken(user.id);
   }

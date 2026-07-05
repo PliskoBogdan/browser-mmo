@@ -3,6 +3,7 @@ import { ShopService } from './shop.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from 'express';
 import { BuyItemDto } from './dto/buy-item.dto';
+import { BuyConsumableDto } from './dto/buy-consumable.dto';
 
 interface AuthenticatedRequest extends Request {
   user: { userId: number };
@@ -22,5 +23,11 @@ export class ShopController {
   @HttpCode(HttpStatus.OK)
   buy(@Req() req: AuthenticatedRequest, @Param('subLocationId', ParseIntPipe) subLocationId: number, @Body() dto: BuyItemDto) {
     return this.shopService.buy(req.user.userId, subLocationId, dto.equipmentItemId);
+  }
+
+  @Post(':subLocationId/buy-item')
+  @HttpCode(HttpStatus.OK)
+  buyItem(@Req() req: AuthenticatedRequest, @Param('subLocationId', ParseIntPipe) subLocationId: number, @Body() dto: BuyConsumableDto) {
+    return this.shopService.buyItem(req.user.userId, subLocationId, dto.itemId);
   }
 }

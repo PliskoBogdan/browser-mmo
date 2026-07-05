@@ -68,10 +68,7 @@ export class CharacterService {
     if (user.level < perk.requiredLevel) throw new BadRequestException(`Requires level ${perk.requiredLevel}.`);
     if (user.perkPoints < 1) throw new BadRequestException('No perk points available.');
 
-    await this.prisma.$transaction([
-      this.prisma.userPerk.create({ data: { userId, perkCode: code } }),
-      this.prisma.user.update({ where: { id: userId }, data: { perkPoints: { decrement: 1 } } }),
-    ]);
+    await this.prisma.$transaction([this.prisma.userPerk.create({ data: { userId, perkCode: code } }), this.prisma.user.update({ where: { id: userId }, data: { perkPoints: { decrement: 1 } } })]);
 
     await this.syncMaxHp(userId);
     return this.getMe(userId);

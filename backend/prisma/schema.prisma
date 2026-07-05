@@ -45,6 +45,8 @@ model User {
   perks          UserPerk[]
   battles        Battle[]
   inventory      InventoryItem[]
+  riftRuns       RiftRun[]
+  exploredTiles  UserExploredTile[]
 
   createdAt DateTime @default(now())
 }
@@ -143,9 +145,10 @@ model SubLocation {
   gridX Int
   gridY Int
 
-  monsters     SubLocationMonster[]
-  battles      Battle[]
-  shopListings ShopListing[]
+  monsters         SubLocationMonster[]
+  battles          Battle[]
+  shopListings     ShopListing[]
+  shopItemListings ShopItemListing[]
 
   @@unique([locationId, gridX, gridY])
 }
@@ -161,6 +164,19 @@ model ShopListing {
   equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
 
   @@unique([subLocationId, equipmentItemId])
+}
+
+// What a SHOP sells beyond weapons/armor — consumable Items (e.g. Torch).
+// A separate table from ShopListing since it points at Item, not EquipmentItem.
+model ShopItemListing {
+  id            Int @id @default(autoincrement())
+  subLocationId Int
+  itemId        Int
+
+  subLocation SubLocation @relation(fields: [subLocationId], references: [id])
+  item        Item        @relation(fields: [itemId], references: [id])
+
+  @@unique([subLocationId, itemId])
 }
 
 enum SubLocationKind {
@@ -187,6 +203,7 @@ model Monster {
   subLocations SubLocationMonster[]
   battles      Battle[]
   loot         MonsterLoot[]
+  riftTiles    RiftTile[]
 }
 
 model Item {
@@ -196,8 +213,15 @@ model Item {
   sellValue   Int
   rarity      ItemRarity @default(COMMON)
 
-  drops     MonsterLoot[]
-  inventory InventoryItem[]
+  // Set only for items a shop actually sells (e.g. Torch). Null means the
+  // item is never purchasable — only ever found (e.g. Rusty Key, monster loot).
+  buyPrice Int?
+
+  drops         MonsterLoot[]
+  inventory     InventoryItem[]
+  gatesOpened   RiftTile[]        @relation("RiftGateItem")
+  resourceTiles RiftTile[]        @relation("RiftResourceItem")
+  shopListings  ShopItemListing[]
 }
 
 enum ItemRarity {
@@ -243,13 +267,18 @@ model SubLocationMonster {
 }
 
 model Battle {
-  id            Int         @id @default(autoincrement())
-  userId        Int
-  user          User        @relation(fields: [userId], references: [id])
-  monsterId     Int
-  monster       Monster     @relation(fields: [monsterId], references: [id])
-  subLocationId Int
-  subLocation   SubLocation @relation(fields: [subLocationId], references: [id])
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id])
+  monsterId Int
+  monster   Monster @relation(fields: [monsterId], references: [id])
+
+  // Exactly one of these is set: a battle happens either on a static
+  // sub-location tile or on a rift tile.
+  subLocationId Int?
+  subLocation   SubLocation? @relation(fields: [subLocationId], references: [id])
+  riftTileId    Int?
+  riftTile      RiftTile?    @relation(fields: [riftTileId], references: [id])
 
   monsterCurrentHp    Int
   lastPlayerAttackAt  DateTime?
@@ -272,4 +301,125 @@ enum BattleStatus {
   WON
   LOST
   FLED
+}
+
+// --- Rifts: procedurally generated, shared, expiring dungeons ---
+
+enum RiftTileKind {
+  ENTRANCE // spawn point; extraction is possible anywhere, this is just the anchor
+  PATH
+  MONSTER
+  BOSS // one per rift — a tougher monster with guaranteed rare loot
+  RESOURCE // gatherable node, shared across players and depleting (charges)
+  CHEST // one-time treasure (gold + item); once opened it never respawns
+  LOCKED // gate: needs the key item to step onto (consumed per player)
+  DARK // gate: needs a torch to step onto (consumed per player)
+}
+
+enum RiftRunStatus {
+  ACTIVE
+  EXTRACTED
+  DEAD
+}
+
+model Rift {
+  id       Int    @id @default(autoincrement())
+  name     String
+  tier     Int    @default(1)
+  minLevel Int    @default(1)
+  seed     Int
+
+  gridWidth  Int
+  gridHeight Int
+  entranceX  Int
+  entranceY  Int
+
+  // Position on the overworld grid — a rift is a node on the same map as
+  // Locations, reached by walking to it (see RiftWorldService.pickFreeCell).
+  mapX Int
+  mapY Int
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  tiles RiftTile[]
+  runs  RiftRun[]
+
+  @@unique([mapX, mapY])
+}
+
+// The rift map is shared world state: monster kills and resource depletion are
+// stored here (respawnAt), while per-player visibility lives in UserExploredTile.
+model RiftTile {
+  id     Int          @id @default(autoincrement())
+  riftId Int
+  rift   Rift         @relation(fields: [riftId], references: [id], onDelete: Cascade)
+  x      Int
+  y      Int
+  kind   RiftTileKind
+  name   String
+  depth  Int // BFS distance from the entrance — scales danger and loot
+
+  // Groups tiles into a visual "room" (3-5+ cells) vs. a bare 1-wide
+  // corridor tile (null). Scoped to this rift only — not a global id.
+  roomId Int?
+
+  requiredItemId Int? // LOCKED/DARK: item consumed to open
+  requiredItem   Item? @relation("RiftGateItem", fields: [requiredItemId], references: [id])
+
+  monsterId Int?
+  monster   Monster? @relation(fields: [monsterId], references: [id])
+
+  // RESOURCE: renewable gathering node. CHEST: one-time treasure (reuses the
+  // same fields; maxCharges is always 1 and never respawns once emptied).
+  resourceItemId Int?
+  resourceItem   Item? @relation("RiftResourceItem", fields: [resourceItemId], references: [id])
+  maxCharges     Int   @default(0)
+  charges        Int   @default(0)
+  goldReward     Int   @default(0) // CHEST only — paid out immediately, not staged
+
+  // Shared cooldown: a killed monster / emptied resource node is inactive
+  // until this instant passes (lazy respawn — no background job).
+  respawnAt DateTime?
+
+  battles  Battle[]
+  explored UserExploredTile[]
+
+  @@unique([riftId, x, y])
+}
+
+// One extraction run per player per rift visit. Loot gathered inside the rift
+// is staged here (at risk) and only banked to the inventory on extraction —
+// dying forfeits part of it.
+model RiftRun {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+  riftId Int
+  rift   Rift @relation(fields: [riftId], references: [id], onDelete: Cascade)
+
+  x Int
+  y Int
+
+  status RiftRunStatus @default(ACTIVE)
+  // Staged loot: [{ itemId, name, rarity, quantity }]
+  loot   Json          @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+// Fog of war: which rift tiles a player has revealed.
+model UserExploredTile {
+  userId     Int
+  riftTileId Int
+
+  user User     @relation(fields: [userId], references: [id])
+  tile RiftTile @relation(fields: [riftTileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, riftTileId])
 }

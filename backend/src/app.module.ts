@@ -11,20 +11,10 @@ import { CharacterModule } from './character/character.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { EquipmentModule } from './equipment/equipment.module';
 import { ShopModule } from './shop/shop.module';
+import { RiftModule } from './rift/rift.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    AuthModule,
-    UsersModule,
-    LocationModule,
-    BattleModule,
-    CharacterModule,
-    InventoryModule,
-    EquipmentModule,
-    ShopModule,
-  ],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule, InventoryModule, EquipmentModule, ShopModule, RiftModule],
   controllers: [AppController],
   providers: [AppService],
 })

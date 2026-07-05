@@ -1,13 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BattleStatus, SubLocationKind } from '../../prisma/generated/client/enums';
-
-const WORLD_WIDTH = 7;
-const WORLD_HEIGHT = 5;
+import { BattleStatus, RiftRunStatus, SubLocationKind } from '../../prisma/generated/client/enums';
+import { RiftWorldService } from '../rift/rift-world.service';
+import { WORLD_WIDTH, WORLD_HEIGHT } from './world.config';
 
 @Injectable()
 export class LocationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private riftWorld: RiftWorldService,
+  ) {}
 
   findAll() {
     return this.prisma.location.findMany({
@@ -63,14 +65,23 @@ export class LocationService {
 
   async getWorldMap(userId: number) {
     const user = await this.getUserOrThrow(userId);
-    const locations = await this.prisma.location.findMany({
-      select: { id: true, name: true, description: true, minLevel: true, mapX: true, mapY: true },
-    });
+    await this.riftWorld.ensureRotated();
+
+    const [locations, rifts] = await Promise.all([
+      this.prisma.location.findMany({
+        select: { id: true, name: true, description: true, minLevel: true, mapX: true, mapY: true },
+      }),
+      this.prisma.rift.findMany({
+        where: { expiresAt: { gt: new Date() } },
+        select: { id: true, name: true, tier: true, minLevel: true, mapX: true, mapY: true, expiresAt: true },
+      }),
+    ]);
 
     return {
       width: WORLD_WIDTH,
       height: WORLD_HEIGHT,
       locations: locations.map((l) => ({ ...l, locked: user.level < l.minLevel })),
+      rifts: rifts.map((r) => ({ ...r, expiresAt: r.expiresAt.toISOString(), locked: user.level < r.minLevel })),
     };
   }
 
@@ -81,19 +92,27 @@ export class LocationService {
       throw new BadRequestException('You are inside a location. Leave it first.');
     }
     await this.assertNoActiveBattle(userId);
+    await this.assertNoActiveRiftRun(userId);
     this.assertInBounds(x, y, WORLD_WIDTH, WORLD_HEIGHT);
     this.assertAdjacent(user.posX, user.posY, x, y);
 
     await this.prisma.user.update({ where: { id: userId }, data: { posX: x, posY: y } });
 
-    const location = await this.prisma.location.findUnique({
-      where: { mapX_mapY: { mapX: x, mapY: y } },
-      select: { id: true, name: true, description: true, minLevel: true },
-    });
+    const [location, rift] = await Promise.all([
+      this.prisma.location.findUnique({
+        where: { mapX_mapY: { mapX: x, mapY: y } },
+        select: { id: true, name: true, description: true, minLevel: true },
+      }),
+      this.prisma.rift.findFirst({
+        where: { mapX: x, mapY: y, expiresAt: { gt: new Date() } },
+        select: { id: true, name: true, tier: true, minLevel: true, expiresAt: true },
+      }),
+    ]);
 
     return {
       position: { locationId: null, x, y },
       location: location ? { ...location, locked: user.level < location.minLevel } : null,
+      rift: rift ? { ...rift, mapX: x, mapY: y, expiresAt: rift.expiresAt.toISOString(), locked: user.level < rift.minLevel } : null,
     };
   }
 
@@ -110,6 +129,7 @@ export class LocationService {
       throw new ForbiddenException(`This area requires level ${location.minLevel}. You are level ${user.level}.`);
     }
     await this.assertNoActiveBattle(userId);
+    await this.assertNoActiveRiftRun(userId);
 
     const { x: posX, y: posY } = this.computeEntryPoint(location.subLocations);
 
@@ -129,10 +149,7 @@ export class LocationService {
   }
 
   private computeEntryPoint(subLocations: { gridX: number; gridY: number; kind: SubLocationKind }[]): { x: number; y: number } {
-    const entry =
-      subLocations.find(
-        (s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP || s.kind === SubLocationKind.LOOT_SHOP,
-      ) ?? null;
+    const entry = subLocations.find((s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP || s.kind === SubLocationKind.LOOT_SHOP) ?? null;
     return { x: entry?.gridX ?? 0, y: entry?.gridY ?? 0 };
   }
 
@@ -190,6 +207,11 @@ export class LocationService {
   private async assertNoActiveBattle(userId: number) {
     const activeBattle = await this.prisma.battle.findFirst({ where: { userId, status: BattleStatus.ACTIVE } });
     if (activeBattle) throw new ForbiddenException('Resolve your current battle first.');
+  }
+
+  private async assertNoActiveRiftRun(userId: number) {
+    const run = await this.prisma.riftRun.findFirst({ where: { userId, status: RiftRunStatus.ACTIVE }, select: { id: true } });
+    if (run) throw new ForbiddenException('You are inside a rift. Extract from it first.');
   }
 
   private assertInBounds(x: number, y: number, width: number, height: number) {

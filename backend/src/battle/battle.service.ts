@@ -1,18 +1,22 @@
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocationService } from '../location/location.service';
-import { BattleStatus, SubLocationKind } from '../../prisma/generated/client/enums';
+import { BattleStatus, RiftRunStatus, RiftTileKind } from '../../prisma/generated/client/enums';
+import { SubLocationKind } from '../../prisma/generated/client/enums';
 import { Prisma } from '../../prisma/generated/client/client';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
 import { CharacterProfile, CharacterStatsService, STATS_INCLUDE, STAT_POINTS_PER_LEVEL } from '../character/character-stats.service';
 import { PERK_BY_CODE, perkPointsForLevel } from '../character/perks.config';
+import { calculateLevelUp } from '../character/leveling';
+import { BOSS_RESPAWN_MS, DEATH_LOOT_KEEP_RATIO, MONSTER_RESPAWN_MS, RIFT_BONUS_DROPS, RIFT_LOOT_CHANCE_CAP, RIFT_LOOT_CHANCE_PER_DEPTH } from '../rift/rift.config';
+import { addRiftLoot, applyDeathPenalty, parseRiftLoot } from '../rift/rift-loot';
 import { CombatResolver, createInitialState } from './engine/engine';
 import { SKILL_BY_CODE } from './engine/skills.config';
 import { resolveAiProfile } from './engine/monster-ai.config';
 import { buildStateView } from './engine/views';
 import type { BattleRuntimeState, EngineContext } from './engine/types';
+import type { RiftLootEntry } from '@my/shared';
 
-const EXP_PER_LEVEL_MULTIPLIER = 100;
 // Guard against pathological loops if a player leaves a battle idle for a very
 // long time before their next attack.
 const MAX_MONSTER_TICKS = 1000;
@@ -109,6 +113,7 @@ export class BattleService {
         include: {
           monster: { include: { loot: { include: { item: true } } } },
           subLocation: { select: { locationId: true } },
+          riftTile: { select: { id: true, depth: true, kind: true } },
         },
       }),
       this.prisma.user.findUnique({ where: { id: userId }, include: STATS_INCLUDE }),
@@ -175,11 +180,29 @@ export class BattleService {
     let statPointsGained = 0;
     let perkPointsGained = 0;
     let newPosition: { x: number; y: number } | undefined;
-    let lootDrops: { name: string; quantity: number; rarity: string }[] = [];
+    let lootDrops: { name: string; quantity: number; rarity: string; banked?: boolean }[] = [];
+    // Table loot (Wolf Pelt, etc.) is at-risk: staged in the run's bag,
+    // banked only on extraction. Gate items (Torch/Rusty Key) are tools, not
+    // treasure — they go straight to the real inventory so a torch found
+    // deep in a rift can immediately unlock a door in that same run.
+    let riftBagEntries: RiftLootEntry[] = [];
+    let gateItemEntries: RiftLootEntry[] = [];
+    let lostLoot: RiftLootEntry[] = [];
 
     if (monsterDied && !playerDied) {
-      newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
-      lootDrops = this.rollLoot(monster.loot);
+      if (battle.riftTile) {
+        const chanceBonus = battle.riftTile.depth * RIFT_LOOT_CHANCE_PER_DEPTH;
+        const tableDrops = this.rollLoot(monster.loot, chanceBonus);
+        riftBagEntries = tableDrops.map((d) => {
+          const source = monster.loot.find((l) => l.item.name === d.name)!;
+          return { itemId: source.itemId, name: d.name, rarity: d.rarity, quantity: d.quantity };
+        });
+        gateItemEntries = await this.rollRiftBonusDrops();
+        lootDrops = [...riftBagEntries.map((e) => ({ name: e.name, quantity: e.quantity, rarity: e.rarity, banked: false })), ...gateItemEntries.map((e) => ({ name: e.name, quantity: e.quantity, rarity: e.rarity, banked: true }))];
+      } else if (battle.subLocation) {
+        newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
+        lootDrops = this.rollLoot(monster.loot);
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -189,7 +212,7 @@ export class BattleService {
 
         const newExp = user.exp + expGained;
         const newGold = user.gold + goldGained;
-        const { level: newLevel, remainingExp } = this.calculateLevelUp(user.level, newExp);
+        const { level: newLevel, remainingExp } = calculateLevelUp(user.level, newExp);
         leveledUp = newLevel > user.level;
         statPointsGained = (newLevel - user.level) * STAT_POINTS_PER_LEVEL;
         perkPointsGained = perkPointsForLevel(newLevel) - perkPointsForLevel(user.level);
@@ -212,20 +235,49 @@ export class BattleService {
           },
         });
 
-        for (const drop of monster.loot) {
-          const dropped = lootDrops.find((d) => d.name === drop.item.name);
-          if (!dropped) continue;
-          await tx.inventoryItem.upsert({
-            where: { userId_itemId: { userId, itemId: drop.itemId } },
-            update: { quantity: { increment: dropped.quantity } },
-            create: { userId, itemId: drop.itemId, quantity: dropped.quantity },
+        if (battle.riftTile) {
+          // Shared world: the defeated monster stays gone for everyone until
+          // it respawns. Bosses come back much slower — they shouldn't feel farmable.
+          const respawnMs = battle.riftTile.kind === RiftTileKind.BOSS ? BOSS_RESPAWN_MS : MONSTER_RESPAWN_MS;
+          await tx.riftTile.update({
+            where: { id: battle.riftTile.id },
+            data: { respawnAt: new Date(Date.now() + respawnMs) },
           });
+          if (playerDied) {
+            lostLoot = await this.applyRiftDeath(tx, userId);
+          } else {
+            if (riftBagEntries.length) {
+              const run = await tx.riftRun.findFirst({ where: { userId, status: RiftRunStatus.ACTIVE } });
+              if (run) {
+                const merged = addRiftLoot(parseRiftLoot(run.loot), riftBagEntries);
+                await tx.riftRun.update({ where: { id: run.id }, data: { loot: merged as unknown as Prisma.InputJsonValue } });
+              }
+            }
+            for (const entry of gateItemEntries) {
+              await tx.inventoryItem.upsert({
+                where: { userId_itemId: { userId, itemId: entry.itemId } },
+                update: { quantity: { increment: entry.quantity } },
+                create: { userId, itemId: entry.itemId, quantity: entry.quantity },
+              });
+            }
+          }
+        } else {
+          for (const drop of monster.loot) {
+            const dropped = lootDrops.find((d) => d.name === drop.item.name);
+            if (!dropped) continue;
+            await tx.inventoryItem.upsert({
+              where: { userId_itemId: { userId, itemId: drop.itemId } },
+              update: { quantity: { increment: dropped.quantity } },
+              create: { userId, itemId: drop.itemId, quantity: dropped.quantity },
+            });
+          }
         }
 
         if (playerDied) playerCurrentHp = 0;
       } else if (playerDied) {
         await tx.battle.delete({ where: { id: battle.id } });
         await tx.user.update({ where: { id: userId }, data: { hp: 0, isDead: true } });
+        if (battle.riftTile) lostLoot = await this.applyRiftDeath(tx, userId);
       } else {
         await tx.battle.update({
           where: { id: battle.id },
@@ -266,11 +318,16 @@ export class BattleService {
       attackCooldownMs,
       newPosition,
       lootDrops,
+      riftBattle: battle.riftTile !== null,
+      lostLoot: lostLoot.length ? lostLoot.map((e) => ({ name: e.name, quantity: e.quantity, rarity: e.rarity })) : undefined,
     };
   }
 
   async flee(userId: number) {
-    const battle = await this.prisma.battle.findFirst({ where: { userId, status: BattleStatus.ACTIVE } });
+    const battle = await this.prisma.battle.findFirst({
+      where: { userId, status: BattleStatus.ACTIVE },
+      include: { riftTile: { select: { rift: { select: { id: true, entranceX: true, entranceY: true } } } } },
+    });
     if (!battle || battle.status !== BattleStatus.ACTIVE) {
       throw new BadRequestException('You are not in an active battle.');
     }
@@ -281,18 +338,34 @@ export class BattleService {
     const fleePenalty = Math.floor(user.maxHp * 0.2);
     const newHp = Math.max(1, user.hp - fleePenalty);
 
-    await this.prisma.$transaction([
-      this.prisma.battle.delete({ where: { id: battle.id } }),
-      this.prisma.user.update({ where: { id: userId }, data: { hp: newHp } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.battle.delete({ where: { id: battle.id } });
+      await tx.user.update({ where: { id: userId }, data: { hp: newHp } });
+      // Fleeing a rift fight throws you back to the entrance — retreating in
+      // the dark has a cost beyond lost HP.
+      if (battle.riftTile) {
+        await tx.riftRun.updateMany({
+          where: { userId, status: RiftRunStatus.ACTIVE },
+          data: { x: battle.riftTile.rift.entranceX, y: battle.riftTile.rift.entranceY },
+        });
+      }
+    });
 
-    return { message: 'You fled from battle!', hpLost: fleePenalty, currentHp: newHp };
+    return {
+      message: battle.riftTile ? 'You fled back to the rift entrance!' : 'You fled from battle!',
+      hpLost: fleePenalty,
+      currentHp: newHp,
+    };
   }
 
   async getCurrentBattle(userId: number) {
     const battle = await this.prisma.battle.findFirst({
       where: { userId, status: BattleStatus.ACTIVE },
-      include: { monster: true, subLocation: { include: { location: true } } },
+      include: {
+        monster: true,
+        subLocation: { include: { location: true } },
+        riftTile: { select: { name: true, rift: { select: { name: true } } } },
+      },
     });
 
     if (!battle || battle.status !== BattleStatus.ACTIVE) {
@@ -325,14 +398,45 @@ export class BattleService {
           damage: battle.monster.damage,
           attackSpeed: battle.monster.attackSpeed,
         },
-        location: battle.subLocation.location.name,
-        subLocation: battle.subLocation.name,
+        location: battle.subLocation?.location.name ?? `Rift: ${battle.riftTile?.rift.name ?? 'Unknown'}`,
+        subLocation: battle.subLocation?.name ?? battle.riftTile?.name ?? 'Unknown',
+        riftBattle: battle.riftTile !== null,
         pendingMonsterDamage,
         attackCooldownMs,
         startedAt: battle.createdAt,
         state: buildStateView(ctx, state, now.getTime()),
       },
     };
+  }
+
+  // Called by RiftService when a player steps onto a tile with a living
+  // monster. No weapon check here: getting ambushed unarmed is survivable —
+  // the player can still flee.
+  async startRiftBattle(userId: number, riftTileId: number): Promise<void> {
+    const [user, tile, existing] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, include: STATS_INCLUDE }),
+      this.prisma.riftTile.findUnique({ where: { id: riftTileId }, include: { monster: true } }),
+      this.prisma.battle.findFirst({ where: { userId, status: BattleStatus.ACTIVE }, select: { id: true } }),
+    ]);
+
+    if (!user) throw new NotFoundException('User not found');
+    if (!tile?.monster) throw new NotFoundException('There is no monster here.');
+    if (existing) return;
+
+    const profile = this.stats.computeProfile(user);
+    const ctx = this.buildEngineContext(profile, tile.monster, user.perks);
+    const state = createInitialState(ctx);
+
+    await this.prisma.battle.create({
+      data: {
+        userId,
+        monsterId: tile.monster.id,
+        riftTileId: tile.id,
+        monsterCurrentHp: tile.monster.maxHp,
+        lastMonsterAttackAt: new Date(),
+        state: state as unknown as Prisma.InputJsonValue,
+      },
+    });
   }
 
   // --- Helpers ---
@@ -363,14 +467,7 @@ export class BattleService {
     return state;
   }
 
-  private battleView(
-    id: number,
-    monster: { id: number; name: string; maxHp: number; damage: number; attackSpeed: number },
-    currentHp: number,
-    attackCooldownMs: number,
-    ctx: EngineContext,
-    state: BattleRuntimeState,
-  ) {
+  private battleView(id: number, monster: { id: number; name: string; maxHp: number; damage: number; attackSpeed: number }, currentHp: number, attackCooldownMs: number, ctx: EngineContext, state: BattleRuntimeState) {
     return {
       id,
       monster: { id: monster.id, name: monster.name, maxHp: monster.maxHp, currentHp, damage: monster.damage, attackSpeed: monster.attackSpeed },
@@ -389,22 +486,48 @@ export class BattleService {
     return entries[entries.length - 1];
   }
 
-  private calculateLevelUp(currentLevel: number, totalExp: number): { level: number; remainingExp: number } {
-    let level = currentLevel;
-    let exp = totalExp;
-    while (exp >= level * EXP_PER_LEVEL_MULTIPLIER) {
-      exp -= level * EXP_PER_LEVEL_MULTIPLIER;
-      level++;
+  // Rift death: part of the staged rift bag is forfeited, the rest is banked
+  // to the inventory, and the run ends. Returns what was lost so the caller
+  // can show it on the death screen.
+  private async applyRiftDeath(tx: Prisma.TransactionClient, userId: number): Promise<RiftLootEntry[]> {
+    const run = await tx.riftRun.findFirst({ where: { userId, status: RiftRunStatus.ACTIVE } });
+    if (!run) return [];
+
+    const { kept, lost } = applyDeathPenalty(parseRiftLoot(run.loot), DEATH_LOOT_KEEP_RATIO);
+    for (const entry of kept) {
+      await tx.inventoryItem.upsert({
+        where: { userId_itemId: { userId, itemId: entry.itemId } },
+        update: { quantity: { increment: entry.quantity } },
+        create: { userId, itemId: entry.itemId, quantity: entry.quantity },
+      });
     }
-    return { level, remainingExp: exp };
+    await tx.riftRun.update({
+      where: { id: run.id },
+      data: { status: RiftRunStatus.DEAD, loot: kept as unknown as Prisma.InputJsonValue },
+    });
+    return lost;
   }
 
-  private rollLoot(
-    loot: { itemId: number; dropChance: number; minQuantity: number; maxQuantity: number; item: { name: string; rarity: string } }[],
-  ): { name: string; quantity: number; rarity: string }[] {
+  // Rift-only extra drops (torches, keys) rolled on top of the normal table.
+  private async rollRiftBonusDrops(): Promise<RiftLootEntry[]> {
+    const items = await this.prisma.item.findMany({ where: { name: { in: RIFT_BONUS_DROPS.map((d) => d.itemName) } } });
+    const byName = new Map(items.map((i) => [i.name, i]));
+
+    const drops: RiftLootEntry[] = [];
+    for (const def of RIFT_BONUS_DROPS) {
+      const item = byName.get(def.itemName);
+      if (!item || Math.random() * 100 >= def.chance) continue;
+      const quantity = def.minQuantity + Math.floor(Math.random() * (def.maxQuantity - def.minQuantity + 1));
+      drops.push({ itemId: item.id, name: item.name, rarity: item.rarity, quantity });
+    }
+    return drops;
+  }
+
+  private rollLoot(loot: { itemId: number; dropChance: number; minQuantity: number; maxQuantity: number; item: { name: string; rarity: string } }[], chanceBonus = 0): { name: string; quantity: number; rarity: string }[] {
     const drops: { name: string; quantity: number; rarity: string }[] = [];
     for (const entry of loot) {
-      if (Math.random() * 100 >= entry.dropChance) continue;
+      const chance = Math.min(entry.dropChance + chanceBonus, RIFT_LOOT_CHANCE_CAP);
+      if (Math.random() * 100 >= chance) continue;
       const quantity = entry.minQuantity + Math.floor(Math.random() * (entry.maxQuantity - entry.minQuantity + 1));
       drops.push({ name: entry.item.name, quantity, rarity: entry.item.rarity });
     }

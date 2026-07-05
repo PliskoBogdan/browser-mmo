@@ -64,6 +64,7 @@ export interface ActiveBattle {
   attackCooldownMs: number;
   location?: string;
   subLocation?: string;
+  riftBattle?: boolean;
   pendingMonsterDamage?: number;
   startedAt?: string;
   state?: BattleStateView;
@@ -92,7 +93,13 @@ export interface AttackResult {
   playerDied: boolean;
   attackCooldownMs: number;
   newPosition?: { x: number; y: number };
-  lootDrops?: { name: string; quantity: number; rarity: 'COMMON' | 'UNCOMMON' | 'RARE' }[];
+  // `banked: true` (gate items) landed in the real inventory immediately;
+  // everything else went into the at-risk rift bag pending extraction.
+  lootDrops?: { name: string; quantity: number; rarity: 'COMMON' | 'UNCOMMON' | 'RARE'; banked?: boolean }[];
+  // Fight happened inside a rift: table loot went to the at-risk rift bag.
+  riftBattle?: boolean;
+  // Set when a rift death forfeited part of the staged rift bag.
+  lostLoot?: { name: string; quantity: number; rarity: 'COMMON' | 'UNCOMMON' | 'RARE' }[];
 }
 
 const LOG_LIMIT = 40;

@@ -71,11 +71,37 @@ const VENOMOUS: MonsterAiProfile = {
   ],
 };
 
+// Rift bosses: heavier hitters that lean on defense and enrage hard once
+// wounded, so the fight has a real "second phase" instead of a flat grind.
+const BOSS: MonsterAiProfile = {
+  code: 'boss',
+  intents: [
+    { kind: 'ATTACK', weight: 40 },
+    { kind: 'HEAVY', weight: 35 },
+    { kind: 'DEFEND', weight: 25 },
+  ],
+  triggers: [
+    {
+      id: 'boss_enrage',
+      on: 'MONSTER_HP_BELOW_50',
+      oncePerBattle: true,
+      effects: [{ type: 'APPLY_STATUS', target: 'MONSTER', status: 'enrage', stacks: 2, ticks: 4 }],
+    },
+    {
+      id: 'boss_guard_up',
+      on: 'MONSTER_HIT',
+      everyNth: 5,
+      effects: [{ type: 'APPLY_STATUS', target: 'MONSTER', status: 'guard', stacks: 1, ticks: 2 }],
+    },
+  ],
+};
+
 export const MONSTER_AI_PROFILES: Record<string, MonsterAiProfile> = {
   basic: BASIC,
   feral: FERAL,
   cunning: CUNNING,
   venomous: VENOMOUS,
+  boss: BOSS,
 };
 
 export function resolveAiProfile(aiProfile: string | null | undefined): MonsterAiProfile {

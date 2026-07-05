@@ -134,7 +134,53 @@ async function main() {
     },
   });
 
-  console.log(`Monsters seeded: ${[feralHound, bandit, wolf, ghoul, bogTroll].map((m) => m.name).join(', ')}`);
+  // --- Rift bosses (one per tier, seeded with a much heavier statline) ---
+  const alphaFeralHound = await prisma.monster.upsert({
+    where: { id: 6 },
+    update: { attackSpeed: 0.6, defense: 10, aiProfile: 'boss' },
+    create: {
+      name: 'Alpha Feral Hound',
+      aiProfile: 'boss',
+      maxHp: 250,
+      damage: 22,
+      defense: 10,
+      attackSpeed: 0.6,
+      expReward: 150,
+      goldReward: 80,
+    },
+  });
+
+  const direWolfWarlord = await prisma.monster.upsert({
+    where: { id: 7 },
+    update: { attackSpeed: 0.7, defense: 20, aiProfile: 'boss' },
+    create: {
+      name: 'Dire Wolf Warlord',
+      aiProfile: 'boss',
+      maxHp: 500,
+      damage: 40,
+      defense: 20,
+      attackSpeed: 0.7,
+      expReward: 350,
+      goldReward: 180,
+    },
+  });
+
+  const bogTrollChieftain = await prisma.monster.upsert({
+    where: { id: 8 },
+    update: { attackSpeed: 0.5, defense: 35, aiProfile: 'boss' },
+    create: {
+      name: 'Bog Troll Chieftain',
+      aiProfile: 'boss',
+      maxHp: 900,
+      damage: 65,
+      defense: 35,
+      attackSpeed: 0.5,
+      expReward: 700,
+      goldReward: 400,
+    },
+  });
+
+  console.log(`Monsters seeded: ${[feralHound, bandit, wolf, ghoul, bogTroll, alphaFeralHound, direWolfWarlord, bogTrollChieftain].map((m) => m.name).join(', ')}`);
 
   // --- Items ---
   const ironScraps = await prisma.item.upsert({
@@ -175,6 +221,36 @@ async function main() {
 
   console.log(`Items seeded: ${[ironScraps, bentNails, tornCloth, banditTrinket, wolfPelt, ghoulIchor, trollFat].map((i) => i.name).join(', ')}`);
 
+  // --- Rift items ---
+  // Gate openers (consumed when stepping onto LOCKED/DARK rift tiles) — names
+  // must match TORCH_ITEM_NAME / RIFT_KEY_ITEM_NAME in src/rift/rift.config.ts.
+  // Torch drops from rift mobs AND can be bought (buyPrice set, see shop
+  // listing below); Rusty Key is drop-only (buyPrice left unset).
+  const riftItems: { name: string; description: string; sellValue: number; rarity: 'COMMON' | 'UNCOMMON' | 'RARE'; buyPrice?: number }[] = [
+    { name: 'Torch', description: 'A pitch-soaked torch. Lights the way into dark caves — burns out after one use.', sellValue: 2, rarity: 'COMMON', buyPrice: 15 },
+    { name: 'Rusty Key', description: 'A corroded key looted inside a rift. Opens one sealed door.', sellValue: 10, rarity: 'UNCOMMON' },
+    // Gatherable resources (RESOURCE tiles; shared, depleting nodes) — also
+    // what chests award (the tier's [1] entry).
+    { name: 'Emberleaf Herb', description: 'A warm-to-the-touch herb that only grows near rift energy.', sellValue: 6, rarity: 'COMMON' },
+    { name: 'Iron Ore Chunk', description: 'A heavy chunk of ore, veined with something that glimmers.', sellValue: 14, rarity: 'UNCOMMON' },
+    { name: 'Riftglass Shard', description: 'A shard of crystallized rift energy. Hums faintly.', sellValue: 35, rarity: 'UNCOMMON' },
+    { name: 'Ancient Relic', description: 'An artifact from whatever world the rift tore open. Collectors pay dearly.', sellValue: 120, rarity: 'RARE' },
+    // Boss trophies — guaranteed drop, sold nowhere, worth a lot to a buyer.
+    { name: "Alpha's Fang", description: "A curved fang torn from the Alpha Feral Hound. Still warm.", sellValue: 90, rarity: 'RARE' },
+    { name: "Warlord's Emblem", description: 'A bloodied emblem the Dire Wolf Warlord wore into every fight.', sellValue: 220, rarity: 'RARE' },
+    { name: "Chieftain's Totem", description: "The Bog Troll Chieftain's totem, still humming with dark magic.", sellValue: 500, rarity: 'RARE' },
+  ];
+
+  const riftItemByName = new Map<string, Awaited<ReturnType<typeof prisma.item.upsert>>>();
+  for (const item of riftItems) {
+    riftItemByName.set(item.name, await prisma.item.upsert({ where: { name: item.name }, update: item, create: item }));
+  }
+  const alphaFang = riftItemByName.get("Alpha's Fang")!;
+  const warlordEmblem = riftItemByName.get("Warlord's Emblem")!;
+  const chieftainTotem = riftItemByName.get("Chieftain's Totem")!;
+
+  console.log(`Rift items seeded: ${riftItems.map((i) => i.name).join(', ')}`);
+
   // --- Monster loot tables ---
   const lootTable: { monsterId: number; itemId: number; dropChance: number; minQuantity: number; maxQuantity: number }[] = [
     { monsterId: feralHound.id, itemId: ironScraps.id, dropChance: 70, minQuantity: 1, maxQuantity: 2 },
@@ -185,6 +261,10 @@ async function main() {
     { monsterId: ghoul.id, itemId: bentNails.id, dropChance: 60, minQuantity: 1, maxQuantity: 3 },
     { monsterId: bogTroll.id, itemId: trollFat.id, dropChance: 35, minQuantity: 1, maxQuantity: 1 },
     { monsterId: bogTroll.id, itemId: ironScraps.id, dropChance: 80, minQuantity: 2, maxQuantity: 4 },
+    // Boss trophies — always drop, that's the whole point of fighting one.
+    { monsterId: alphaFeralHound.id, itemId: alphaFang.id, dropChance: 100, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: direWolfWarlord.id, itemId: warlordEmblem.id, dropChance: 100, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: bogTrollChieftain.id, itemId: chieftainTotem.id, dropChance: 100, minQuantity: 1, maxQuantity: 1 },
   ];
 
   for (const entry of lootTable) {
@@ -482,6 +562,18 @@ async function main() {
   }
 
   console.log('Shop listings seeded.');
+
+  // --- Shop item listings (consumables) ---
+  // Torch is purchasable at the starter Trading Post; Rusty Key stays
+  // drop-only (no buyPrice, so it's never listed here).
+  const torch = riftItemByName.get('Torch')!;
+  await prisma.shopItemListing.upsert({
+    where: { subLocationId_itemId: { subLocationId: tradingPost.id, itemId: torch.id } },
+    update: {},
+    create: { subLocationId: tradingPost.id, itemId: torch.id },
+  });
+
+  console.log('Shop item listings seeded.');
 
   // --- Monster Spawns ---
   // Outskirts: Feral Hounds (high weight) + Bandits (low weight)

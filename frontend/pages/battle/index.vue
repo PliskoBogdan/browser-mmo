@@ -6,7 +6,7 @@
     </div>
 
     <BattleResult
-        v-if="lastResult !== null && lastResult.battleStatus === 'WON' && !battle"
+        v-if="lastResult !== null && lastResult.battleStatus !== 'ACTIVE' && !battle"
         :battleResult="lastResult"
     />
 
@@ -306,11 +306,18 @@ async function handleSkill(skillCode: string) {
 }
 
 async function handleFlee() {
+  const wasRiftBattle = battle.value?.riftBattle ?? false;
   fleeing.value = true;
   try {
     await battleStore.flee();
     battleEndType.value = 'warning';
     await characterStore.fetch();
+    // Fleeing a rift fight drops you back at the rift entrance — return there.
+    if (wasRiftBattle) {
+      const riftStore = useRiftStore();
+      const run = await riftStore.fetchCurrent();
+      await navigateTo(run ? `/rifts/${run.id}` : '/world');
+    }
   } finally {
     fleeing.value = false;
   }

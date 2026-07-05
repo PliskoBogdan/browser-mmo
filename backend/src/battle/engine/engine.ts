@@ -3,17 +3,7 @@ import type { BattleRuntimeState, EngineContext, StatusInstance } from './types'
 import { damageReduction } from '../../character/stats.formulas';
 import { MAX_MOMENTUM, SkillDefinition } from './skills.config';
 import { HEAVY_DAMAGE_MULT } from './monster-ai.config';
-import {
-  BLEED_POWER_FRACTION,
-  DODGE_STANCE_EVASION_MULT,
-  ENRAGE_OUTGOING_MULT,
-  GUARD_INCOMING_MULT,
-  MAX_EVASION_WITH_STANCE,
-  POISON_POWER_FRACTION,
-  RIPOSTE_DAMAGE_MULT,
-  STATUS_META,
-  WEAKEN_OUTGOING_MULT,
-} from './statuses.config';
+import { BLEED_POWER_FRACTION, DODGE_STANCE_EVASION_MULT, ENRAGE_OUTGOING_MULT, GUARD_INCOMING_MULT, MAX_EVASION_WITH_STANCE, POISON_POWER_FRACTION, RIPOSTE_DAMAGE_MULT, STATUS_META, WEAKEN_OUTGOING_MULT } from './statuses.config';
 
 // Effects fired by triggers may emit further events (a kill heal, a DoT that
 // finishes the monster, ...). The chain is depth-limited so content authors
@@ -213,10 +203,7 @@ export class CombatResolver {
     switch (effect.type) {
       case 'DAMAGE_MONSTER': {
         // Proc damage is a reward for the trigger firing — it bypasses defense.
-        const amount = Math.max(
-          1,
-          Math.round((effect.flat ?? 0) + this.ctx.player.combat.attackDamage * ((effect.percentOfAttack ?? 0) / 100)),
-        );
+        const amount = Math.max(1, Math.round((effect.flat ?? 0) + this.ctx.player.combat.attackDamage * ((effect.percentOfAttack ?? 0) / 100)));
         this.monsterHp = Math.max(0, this.monsterHp - amount);
         this.totalPlayerDamage += amount;
         this.log(`${this.ctx.monster.name} takes ${amount} bonus damage!`, 'player-hit');

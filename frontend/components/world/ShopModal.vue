@@ -60,6 +60,33 @@
               </template>
             </v-list-item>
           </v-list>
+
+          <template v-if="shopStore.consumables.length">
+            <v-divider class="my-2" />
+            <div class="text-overline text-medium-emphasis px-2">Tools</div>
+            <v-list density="compact">
+              <v-list-item v-for="entry in shopStore.consumables" :key="entry.itemId" :title="entry.name" :subtitle="entry.description ?? undefined">
+                <template #prepend>
+                  <v-icon :color="rarityColor(entry.rarity)">mdi-torch</v-icon>
+                </template>
+                <template #append>
+                  <div class="d-flex align-center" style="gap: 8px">
+                    <v-chip size="x-small" color="warning" variant="tonal">{{ entry.price }}g</v-chip>
+                    <v-btn
+                      size="small"
+                      variant="tonal"
+                      color="primary"
+                      :disabled="!entry.canAfford || buyingItemId === entry.itemId"
+                      :loading="buyingItemId === entry.itemId"
+                      @click="handleBuyItem(entry)"
+                    >
+                      Buy
+                    </v-btn>
+                  </div>
+                </template>
+              </v-list-item>
+            </v-list>
+          </template>
         </template>
 
         <!-- Loot buyer: sell only -->
@@ -102,7 +129,7 @@
 <script setup lang="ts">
 import type { SubLocationCell } from '~/stores/world';
 import type { InventoryEntry, ItemRarity as LootRarity } from '~/stores/inventory';
-import type { ShopCatalogEntry } from '~/stores/shop';
+import type { ShopCatalogEntry, ShopConsumableEntry } from '~/stores/shop';
 import type { EquipmentSlot, ItemRarity } from '~/stores/character';
 
 const props = defineProps<{
@@ -118,6 +145,7 @@ const shopStore = useShopStore();
 
 const sellingId = ref<number | null>(null);
 const buyingId = ref<number | null>(null);
+const buyingItemId = ref<number | null>(null);
 const message = ref('');
 const messageType = ref<'success' | 'error'>('success');
 
@@ -168,6 +196,21 @@ async function handleBuy(entry: ShopCatalogEntry) {
     messageType.value = 'error';
   } finally {
     buyingId.value = null;
+  }
+}
+
+async function handleBuyItem(entry: ShopConsumableEntry) {
+  if (!props.subLocation) return;
+  buyingItemId.value = entry.itemId;
+  try {
+    await shopStore.buyItem(props.subLocation.id, entry.itemId);
+    message.value = `Bought ${entry.name}.`;
+    messageType.value = 'success';
+  } catch (e: any) {
+    message.value = e?.data?.message ?? 'Could not buy that item.';
+    messageType.value = 'error';
+  } finally {
+    buyingItemId.value = null;
   }
 }
 

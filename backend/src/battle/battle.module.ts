@@ -9,5 +9,6 @@ import { CharacterModule } from '../character/character.module';
   imports: [PrismaModule, LocationModule, CharacterModule],
   controllers: [BattleController],
   providers: [BattleService],
+  exports: [BattleService],
 })
 export class BattleModule {}

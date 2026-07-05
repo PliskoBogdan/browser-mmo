@@ -10,10 +10,24 @@ export interface WorldLocationNode {
   locked: boolean;
 }
 
+// A rift as it appears on the overworld map — same grid as Locations, walked
+// to and entered the same way.
+export interface WorldRiftNode {
+  id: number;
+  name: string;
+  tier: number;
+  minLevel: number;
+  mapX: number;
+  mapY: number;
+  expiresAt: string;
+  locked: boolean;
+}
+
 export interface OverworldMap {
   width: number;
   height: number;
   locations: WorldLocationNode[];
+  rifts: WorldRiftNode[];
 }
 
 export interface SubLocationCell {
@@ -87,12 +101,12 @@ export const useWorldStore = defineStore('world', () => {
 
   async function moveOnWorld(x: number, y: number) {
     const { request } = useApi();
-    const result = await request<{ position: { x: number; y: number }; location: WorldLocationNode | null }>('/locations/world/move', {
+    const result = await request<{ position: { x: number; y: number }; location: WorldLocationNode | null; rift: WorldRiftNode | null }>('/locations/world/move', {
       method: 'POST',
       body: { x, y },
     });
     position.value = { locationId: null, x: result.position.x, y: result.position.y };
-    return result.location;
+    return { location: result.location, rift: result.rift };
   }
 
   async function enterLocation(id: number) {

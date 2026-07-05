@@ -38,12 +38,7 @@ export class InventoryService {
     const goldGained = entry.item.sellValue * quantity;
     const remaining = entry.quantity - quantity;
 
-    await this.prisma.$transaction([
-      remaining > 0
-        ? this.prisma.inventoryItem.update({ where: { id: entry.id }, data: { quantity: remaining } })
-        : this.prisma.inventoryItem.delete({ where: { id: entry.id } }),
-      this.prisma.user.update({ where: { id: userId }, data: { gold: { increment: goldGained } } }),
-    ]);
+    await this.prisma.$transaction([remaining > 0 ? this.prisma.inventoryItem.update({ where: { id: entry.id }, data: { quantity: remaining } }) : this.prisma.inventoryItem.delete({ where: { id: entry.id } }), this.prisma.user.update({ where: { id: userId }, data: { gold: { increment: goldGained } } })]);
 
     return { message: `Sold ${quantity}x ${entry.item.name} for ${goldGained} gold.`, goldGained, remainingQuantity: Math.max(0, remaining) };
   }

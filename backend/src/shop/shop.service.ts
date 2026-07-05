@@ -29,14 +29,14 @@ export class ShopService {
       this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, level: true, currentLocationId: true, posX: true, posY: true } }),
       this.prisma.subLocation.findUnique({
         where: { id: subLocationId },
-        include: { shopListings: { include: { equipmentItem: true } } },
+        include: { shopListings: { include: { equipmentItem: true } }, shopItemListings: { include: { item: true } } },
       }),
     ]);
     if (!user) throw new NotFoundException('User not found');
     if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
     this.assertAtShop(user, subLocation);
 
-    return subLocation.shopListings.map(({ equipmentItem: item }) => {
+    const equipment = subLocation.shopListings.map(({ equipmentItem: item }) => {
       const modifiers: Partial<Record<CoreStat, number>> = {};
       for (const stat of CORE_STATS) if (item[stat] !== 0) modifiers[stat] = item[stat];
       return {
@@ -55,13 +55,22 @@ export class ShopService {
         meetsLevel: user.level >= item.minLevel,
       };
     });
+
+    // Consumables (e.g. Torch) — no slot/level gate, just gold.
+    const items = subLocation.shopItemListings.map(({ item }) => ({
+      itemId: item.id,
+      name: item.name,
+      description: item.description,
+      rarity: item.rarity,
+      price: item.buyPrice ?? 0,
+      canAfford: user.gold >= (item.buyPrice ?? 0),
+    }));
+
+    return { equipment, items };
   }
 
   async buy(userId: number, subLocationId: number, equipmentItemId: number) {
-    const [user, subLocation] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, currentLocationId: true, posX: true, posY: true } }),
-      this.prisma.subLocation.findUnique({ where: { id: subLocationId } }),
-    ]);
+    const [user, subLocation] = await Promise.all([this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, currentLocationId: true, posX: true, posY: true } }), this.prisma.subLocation.findUnique({ where: { id: subLocationId } })]);
     if (!user) throw new NotFoundException('User not found');
     if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
     this.assertAtShop(user, subLocation);
@@ -73,12 +82,34 @@ export class ShopService {
     if (!listing) throw new NotFoundException('That item is not sold here.');
     if (user.gold < listing.equipmentItem.price) throw new BadRequestException('Not enough gold.');
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { gold: { decrement: listing.equipmentItem.price } } }),
-      this.prisma.userEquipment.create({ data: { userId, equipmentItemId, equipped: false } }),
-    ]);
+    await this.prisma.$transaction([this.prisma.user.update({ where: { id: userId }, data: { gold: { decrement: listing.equipmentItem.price } } }), this.prisma.userEquipment.create({ data: { userId, equipmentItemId, equipped: false } })]);
 
     return this.character.getMe(userId);
+  }
+
+  async buyItem(userId: number, subLocationId: number, itemId: number) {
+    const [user, subLocation] = await Promise.all([this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, currentLocationId: true, posX: true, posY: true } }), this.prisma.subLocation.findUnique({ where: { id: subLocationId } })]);
+    if (!user) throw new NotFoundException('User not found');
+    if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
+    this.assertAtShop(user, subLocation);
+
+    const listing = await this.prisma.shopItemListing.findUnique({
+      where: { subLocationId_itemId: { subLocationId, itemId } },
+      include: { item: true },
+    });
+    if (!listing || listing.item.buyPrice === null) throw new NotFoundException('That item is not sold here.');
+    if (user.gold < listing.item.buyPrice) throw new BadRequestException('Not enough gold.');
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { gold: { decrement: listing.item.buyPrice } } }),
+      this.prisma.inventoryItem.upsert({
+        where: { userId_itemId: { userId, itemId } },
+        update: { quantity: { increment: 1 } },
+        create: { userId, itemId, quantity: 1 },
+      }),
+    ]);
+
+    return { message: `Bought 1x ${listing.item.name}.` };
   }
 
   // Weapon/armor shops are a separate physical tile from loot buyers by

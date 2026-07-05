@@ -24,7 +24,15 @@ export class AttackResultDto {
   playerDied: boolean;
   attackCooldownMs: number;
   newPosition?: { x: number; y: number };
-  lootDrops?: { name: string; quantity: number; rarity: string }[];
+  // `banked: true` (gate items) landed in the real inventory immediately;
+  // everything else went into the at-risk rift bag pending extraction.
+  lootDrops?: { name: string; quantity: number; rarity: string; banked?: boolean }[];
+  // True when the fight happened inside a rift: table loot goes to the
+  // at-risk rift bag instead of the inventory, and the client should return
+  // to the rift on victory.
+  riftBattle?: boolean;
+  // Set when a rift death forfeited part of the staged rift bag.
+  lostLoot?: { name: string; quantity: number; rarity: string }[];
 }
 
 export class EnterBattleResultDto {

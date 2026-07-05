@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,6 +25,8 @@ export class InventoryService {
   async sell(userId: number, itemId: number, quantity: number) {
     if (quantity < 1) throw new BadRequestException('Quantity must be at least 1.');
 
+    await this.assertAtLootShop(userId);
+
     const entry = await this.prisma.inventoryItem.findUnique({
       where: { userId_itemId: { userId, itemId } },
       include: { item: true },
@@ -44,5 +46,17 @@ export class InventoryService {
     ]);
 
     return { message: `Sold ${quantity}x ${entry.item.name} for ${goldGained} gold.`, goldGained, remainingQuantity: Math.max(0, remaining) };
+  }
+
+  // Loot buyers (LOOT_SHOP) are a separate physical tile from weapon shops by
+  // design — the player must be standing at one to sell loot for gold.
+  private async assertAtLootShop(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { currentLocationId: true, posX: true, posY: true } });
+    if (!user || user.currentLocationId === null) throw new ForbiddenException('You must be at a loot buyer to sell.');
+
+    const subLocation = await this.prisma.subLocation.findUnique({
+      where: { locationId_gridX_gridY: { locationId: user.currentLocationId, gridX: user.posX, gridY: user.posY } },
+    });
+    if (!subLocation || subLocation.kind !== 'LOOT_SHOP') throw new ForbiddenException('You must be at a loot buyer to sell.');
   }
 }

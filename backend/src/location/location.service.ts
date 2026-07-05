@@ -129,7 +129,10 @@ export class LocationService {
   }
 
   private computeEntryPoint(subLocations: { gridX: number; gridY: number; kind: SubLocationKind }[]): { x: number; y: number } {
-    const entry = subLocations.find((s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP) ?? null;
+    const entry =
+      subLocations.find(
+        (s) => s.kind === SubLocationKind.SAFE || s.kind === SubLocationKind.SHOP || s.kind === SubLocationKind.LOOT_SHOP,
+      ) ?? null;
     return { x: entry?.gridX ?? 0, y: entry?.gridY ?? 0 };
   }
 

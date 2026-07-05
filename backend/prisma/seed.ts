@@ -297,6 +297,21 @@ async function main() {
   };
   const villageSquare = await prisma.subLocation.upsert({ where: { id: 3 }, update: villageSquareData, create: villageSquareData });
 
+  // Loot buyer — deliberately a different tile from the Trading Post so
+  // buying gear and selling loot cost separate trips (relevant once stamina
+  // is spent per tile moved).
+  const pawnbrokerData = {
+    id: 12,
+    locationId: ruinedHamlet.id,
+    name: 'Pawnbroker',
+    description: 'A hunched trader who pays coin for salvage and curiosities.',
+    kind: 'LOOT_SHOP' as const,
+    minLevel: 1,
+    gridX: 1,
+    gridY: 2,
+  };
+  const pawnbroker = await prisma.subLocation.upsert({ where: { id: 12 }, update: pawnbrokerData, create: pawnbrokerData });
+
   // --- Sub-Locations: Dark Forest (3x3 grid) ---
   const forestEdgeData = {
     id: 4,
@@ -346,6 +361,18 @@ async function main() {
   };
   const forestRuins = await prisma.subLocation.upsert({ where: { id: 6 }, update: forestRuinsData, create: forestRuinsData });
 
+  const woodlandPawnbrokerData = {
+    id: 13,
+    locationId: darkForest.id,
+    name: 'Woodland Pawnbroker',
+    description: 'A reclusive peddler who trades coin for whatever the woods leave behind.',
+    kind: 'LOOT_SHOP' as const,
+    minLevel: 5,
+    gridX: 2,
+    gridY: 0,
+  };
+  const woodlandPawnbroker = await prisma.subLocation.upsert({ where: { id: 13 }, update: woodlandPawnbrokerData, create: woodlandPawnbrokerData });
+
   // --- Sub-Locations: Cursed Moor (3x2 grid) ---
   const pilgrimsRestData = {
     id: 7,
@@ -383,19 +410,34 @@ async function main() {
   };
   const blightedMarsh = await prisma.subLocation.upsert({ where: { id: 8 }, update: blightedMarshData, create: blightedMarshData });
 
+  const moorPawnbrokerData = {
+    id: 14,
+    locationId: cursedMoor.id,
+    name: 'Moor Pawnbroker',
+    description: 'A wary trader who pays coin for whatever you dragged out of the marsh.',
+    kind: 'LOOT_SHOP' as const,
+    minLevel: 10,
+    gridX: 0,
+    gridY: 1,
+  };
+  const moorPawnbroker = await prisma.subLocation.upsert({ where: { id: 14 }, update: moorPawnbrokerData, create: moorPawnbrokerData });
+
   console.log(
     `Sub-locations seeded: ${[
       hamletGate,
       tradingPost,
       outskirts,
       villageSquare,
+      pawnbroker,
       forestEdge,
       woodlandTradingPost,
       deepForest,
       forestRuins,
+      woodlandPawnbroker,
       pilgrimsRest,
       moorTradingPost,
       blightedMarsh,
+      moorPawnbroker,
     ]
       .map((s) => s.name)
       .join(', ')}`,

@@ -53,7 +53,7 @@ import { TresCanvas } from '@tresjs/core';
 import { OrbitControls, Html } from '@tresjs/cientos';
 import gsap from 'gsap';
 
-export type TileKind = 'EMPTY' | 'SAFE' | 'SHOP' | 'DANGER' | 'LOCATION' | 'LOCATION_LOCKED';
+export type TileKind = 'EMPTY' | 'SAFE' | 'SHOP' | 'LOOT_SHOP' | 'DANGER' | 'LOCATION' | 'LOCATION_LOCKED';
 
 export interface GridTile {
   x: number;
@@ -126,6 +126,7 @@ const tileColors: Record<TileKind, string> = {
   EMPTY: '#333a48',
   SAFE: '#3fae5c',
   SHOP: '#d4af37',
+  LOOT_SHOP: '#8e6bb0',
   DANGER: '#b3403d',
   LOCATION: '#4fa8e0',
   LOCATION_LOCKED: '#565c68',
@@ -196,6 +197,9 @@ watch(
 }
 .tile-label.shop {
   border-color: #d4af37;
+}
+.tile-label.loot_shop {
+  border-color: #8e6bb0;
 }
 .tile-label.danger {
   border-color: #b3403d;

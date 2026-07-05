@@ -165,7 +165,8 @@ model ShopListing {
 
 enum SubLocationKind {
   SAFE
-  SHOP
+  SHOP // sells weapons/armor (buy only)
+  LOOT_SHOP // buys monster loot for gold (sell only) — deliberately a separate tile from SHOP
   DANGER
 }
 

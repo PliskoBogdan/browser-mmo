@@ -127,7 +127,7 @@ async function handleArrival(subLocation: SubLocationCell) {
     } catch (e: any) {
       error.value = e?.data?.message ?? 'Could not enter this area.';
     }
-  } else if (subLocation.kind === 'SHOP') {
+  } else if (subLocation.kind === 'SHOP' || subLocation.kind === 'LOOT_SHOP') {
     shopSubLocation.value = subLocation;
     shopOpen.value = true;
   } else {

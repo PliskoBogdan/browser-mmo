@@ -27,6 +27,8 @@ export interface EquippedItem {
   slot: EquipmentSlot;
   rarity: ItemRarity;
   description: string | null;
+  icon: string | null;
+  minLevel: number;
   baseDamage: number;
   attackSpeed: number | null;
   modifiers: Partial<Record<CoreStat, number>>;

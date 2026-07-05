@@ -51,6 +51,8 @@
         <slot />
       </v-container>
     </v-main>
+
+    <InventoryWindow />
   </v-app>
 </template>
 

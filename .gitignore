@@ -32,3 +32,4 @@ Thumbs.db
 
 #Frontend
 frontend/.nuxt/
+frontend/.output/

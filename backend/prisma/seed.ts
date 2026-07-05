@@ -14,6 +14,9 @@ async function main() {
     rarity?: 'COMMON' | 'UNCOMMON' | 'RARE';
     description?: string;
     sellValue?: number;
+    price?: number;
+    minLevel?: number;
+    icon?: string;
     baseDamage?: number;
     attackSpeed?: number;
     strength?: number;
@@ -23,18 +26,30 @@ async function main() {
     criticalDamage?: number;
     defense?: number;
   }[] = [
-    // Weapons: baseDamage + attackSpeed drive combat; may also carry stat mods.
-    { name: 'Pistol', slot: 'WEAPON', description: 'A reliable sidearm. Balanced and quick.', baseDamage: 15, attackSpeed: 1.5, accuracy: 2, sellValue: 10 },
-    { name: 'Shotgun', slot: 'WEAPON', rarity: 'UNCOMMON', description: 'Slow but hits like a truck.', baseDamage: 35, attackSpeed: 0.6, strength: 3, criticalDamage: 15, sellValue: 30 },
-    { name: 'SMG', slot: 'WEAPON', description: 'Sprays fast, low damage per shot.', baseDamage: 10, attackSpeed: 2, agility: 2, sellValue: 20 },
-    // Starter armor set (names must match STARTING_ARMOR_NAMES in auth.service).
-    { name: 'Scout Helmet', slot: 'HELMET', description: 'A dented but serviceable helmet.', defense: 4, accuracy: 2, sellValue: 8 },
-    { name: 'Basic Body Armor', slot: 'BODY', description: 'A simple protective vest.', defense: 10, strength: 5, agility: -1, sellValue: 12 },
-    { name: 'Lightweight Pants', slot: 'PANTS', description: 'Padded, flexible trousers.', agility: 4, endurance: 2, defense: 2, sellValue: 8 },
-    { name: 'Combat Gloves', slot: 'GLOVES', description: 'Grip-enhancing tactical gloves.', accuracy: 4, criticalDamage: 5, sellValue: 8 },
-    // Rarer finds to chase.
-    { name: 'Reinforced Helmet', slot: 'HELMET', rarity: 'UNCOMMON', description: 'Heavy plating for the head.', defense: 12, endurance: 3, agility: -2, sellValue: 40 },
-    { name: 'Kevlar Vest', slot: 'BODY', rarity: 'RARE', description: 'Pre-war military body armor.', defense: 25, strength: 8, agility: -3, sellValue: 90 },
+    // --- Tier 1 weapons (Lv1, Ruined Hamlet / Trading Post) ---
+    { name: 'Rusty Sword', slot: 'WEAPON', description: 'A worn blade, nicked but still sharp enough.', baseDamage: 15, attackSpeed: 1.3, sellValue: 8, price: 30, minLevel: 1, icon: 'mdi-sword' },
+    { name: 'Hand Axe', slot: 'WEAPON', description: 'A simple woodcutter’s axe, pressed into combat.', baseDamage: 20, attackSpeed: 1.0, strength: 2, sellValue: 12, price: 45, minLevel: 1, icon: 'mdi-axe' },
+    { name: 'Training Rapier', slot: 'WEAPON', description: 'Light and quick, favoring precision over power.', baseDamage: 10, attackSpeed: 1.9, accuracy: 3, sellValue: 10, price: 35, minLevel: 1, icon: 'mdi-sword-cross' },
+
+    // --- Tier 2 weapons (Lv5, Dark Forest / Woodland Trading Post) ---
+    { name: 'Steel Sword', slot: 'WEAPON', rarity: 'UNCOMMON', description: 'A well-forged blade with real heft.', baseDamage: 30, attackSpeed: 1.3, strength: 2, sellValue: 25, price: 120, minLevel: 5, icon: 'mdi-sword' },
+    { name: 'War Axe', slot: 'WEAPON', rarity: 'UNCOMMON', description: 'Heavy enough to cleave through armor.', baseDamage: 40, attackSpeed: 0.8, strength: 5, criticalDamage: 10, sellValue: 35, price: 160, minLevel: 5, icon: 'mdi-axe' },
+    { name: "Duelist's Rapier", slot: 'WEAPON', rarity: 'UNCOMMON', description: 'Balanced steel favored by traveling swordmasters.', baseDamage: 22, attackSpeed: 2.0, accuracy: 6, agility: 3, sellValue: 30, price: 140, minLevel: 5, icon: 'mdi-sword-cross' },
+
+    // --- Tier 3 weapons (Lv10, Cursed Moor / Moor Trading Post) ---
+    { name: "Knight's Longsword", slot: 'WEAPON', rarity: 'RARE', description: 'A knightly blade, etched with an old house sigil.', baseDamage: 50, attackSpeed: 1.2, strength: 6, defense: 4, sellValue: 60, price: 320, minLevel: 10, icon: 'mdi-sword' },
+    { name: "Executioner's Axe", slot: 'WEAPON', rarity: 'RARE', description: 'A brutal two-handed axe built for a single, decisive blow.', baseDamage: 65, attackSpeed: 0.7, strength: 10, criticalDamage: 20, sellValue: 80, price: 400, minLevel: 10, icon: 'mdi-axe' },
+    { name: 'Silver Rapier', slot: 'WEAPON', rarity: 'RARE', description: 'Silver-inlaid steel, deadly against man and monster alike.', baseDamage: 38, attackSpeed: 2.2, accuracy: 10, agility: 5, criticalDamage: 15, sellValue: 70, price: 380, minLevel: 10, icon: 'mdi-sword-cross' },
+
+    // --- Starter armor set (names must match STARTING_ARMOR_NAMES in auth.service) ---
+    { name: 'Leather Cap', slot: 'HELMET', description: 'A dented but serviceable cap.', defense: 4, accuracy: 2, sellValue: 8, price: 20, minLevel: 1 },
+    { name: 'Leather Jerkin', slot: 'BODY', description: 'A simple protective jerkin.', defense: 10, strength: 5, agility: -1, sellValue: 12, price: 28, minLevel: 1 },
+    { name: 'Leather Trousers', slot: 'PANTS', description: 'Padded, flexible trousers.', agility: 4, endurance: 2, defense: 2, sellValue: 8, price: 20, minLevel: 1 },
+    { name: 'Worn Leather Gloves', slot: 'GLOVES', description: 'Grip-enhancing leather gloves.', accuracy: 4, criticalDamage: 5, sellValue: 8, price: 20, minLevel: 1 },
+
+    // --- Rarer armor to chase ---
+    { name: 'Steel Helm', slot: 'HELMET', rarity: 'UNCOMMON', description: 'Heavy plating for the head.', defense: 12, endurance: 3, agility: -2, sellValue: 40, price: 90, minLevel: 5 },
+    { name: 'Plate Armor', slot: 'BODY', rarity: 'RARE', description: 'Full plate, forged for knights.', defense: 25, strength: 8, agility: -3, sellValue: 90, price: 250, minLevel: 10 },
   ];
 
   for (const e of equipment) {
@@ -44,11 +59,11 @@ async function main() {
   console.log(`Equipment seeded: ${equipment.map((e) => e.name).join(', ')}`);
 
   // --- Monsters ---
-  const strayDog = await prisma.monster.upsert({
+  const feralHound = await prisma.monster.upsert({
     where: { id: 1 },
-    update: { attackSpeed: 0.4, defense: 0, aiProfile: 'feral' },
+    update: { name: 'Feral Hound', attackSpeed: 0.4, defense: 0, aiProfile: 'feral' },
     create: {
-      name: 'Stray Dog',
+      name: 'Feral Hound',
       aiProfile: 'feral',
       maxHp: 30,
       damage: 5,
@@ -104,11 +119,11 @@ async function main() {
     },
   });
 
-  const mutant = await prisma.monster.upsert({
+  const bogTroll = await prisma.monster.upsert({
     where: { id: 5 },
-    update: { attackSpeed: 0.5, defense: 25, aiProfile: 'venomous' },
+    update: { name: 'Bog Troll', attackSpeed: 0.5, defense: 25, aiProfile: 'venomous' },
     create: {
-      name: 'Mutant',
+      name: 'Bog Troll',
       aiProfile: 'venomous',
       maxHp: 200,
       damage: 40,
@@ -119,18 +134,18 @@ async function main() {
     },
   });
 
-  console.log(`Monsters seeded: ${[strayDog, bandit, wolf, ghoul, mutant].map((m) => m.name).join(', ')}`);
+  console.log(`Monsters seeded: ${[feralHound, bandit, wolf, ghoul, bogTroll].map((m) => m.name).join(', ')}`);
 
   // --- Items ---
-  const scrapMetal = await prisma.item.upsert({
-    where: { name: 'Scrap Metal' },
+  const ironScraps = await prisma.item.upsert({
+    where: { name: 'Rusty Iron Scraps' },
     update: {},
-    create: { name: 'Scrap Metal', description: 'Rusted fragments of pre-war machinery.', sellValue: 3, rarity: 'COMMON' },
+    create: { name: 'Rusty Iron Scraps', description: 'Rusted fragments of old ironwork.', sellValue: 3, rarity: 'COMMON' },
   });
-  const rustyBolts = await prisma.item.upsert({
-    where: { name: 'Rusty Bolts' },
+  const bentNails = await prisma.item.upsert({
+    where: { name: 'Bent Nails' },
     update: {},
-    create: { name: 'Rusty Bolts', description: 'A handful of corroded bolts.', sellValue: 4, rarity: 'COMMON' },
+    create: { name: 'Bent Nails', description: 'A handful of corroded nails.', sellValue: 4, rarity: 'COMMON' },
   });
   const tornCloth = await prisma.item.upsert({
     where: { name: 'Torn Cloth' },
@@ -152,24 +167,24 @@ async function main() {
     update: {},
     create: { name: 'Ghoul Ichor', description: 'A vial of viscous, faintly glowing fluid.', sellValue: 30, rarity: 'UNCOMMON' },
   });
-  const mutantGland = await prisma.item.upsert({
-    where: { name: 'Mutant Gland' },
+  const trollFat = await prisma.item.upsert({
+    where: { name: 'Troll Fat' },
     update: {},
-    create: { name: 'Mutant Gland', description: 'A pulsing organ still warm to the touch. Valuable to the right buyer.', sellValue: 75, rarity: 'RARE' },
+    create: { name: 'Troll Fat', description: 'A pulsing lump of fat still warm to the touch. Valuable to the right buyer.', sellValue: 75, rarity: 'RARE' },
   });
 
-  console.log(`Items seeded: ${[scrapMetal, rustyBolts, tornCloth, banditTrinket, wolfPelt, ghoulIchor, mutantGland].map((i) => i.name).join(', ')}`);
+  console.log(`Items seeded: ${[ironScraps, bentNails, tornCloth, banditTrinket, wolfPelt, ghoulIchor, trollFat].map((i) => i.name).join(', ')}`);
 
   // --- Monster loot tables ---
   const lootTable: { monsterId: number; itemId: number; dropChance: number; minQuantity: number; maxQuantity: number }[] = [
-    { monsterId: strayDog.id, itemId: scrapMetal.id, dropChance: 70, minQuantity: 1, maxQuantity: 2 },
+    { monsterId: feralHound.id, itemId: ironScraps.id, dropChance: 70, minQuantity: 1, maxQuantity: 2 },
     { monsterId: bandit.id, itemId: tornCloth.id, dropChance: 60, minQuantity: 1, maxQuantity: 2 },
     { monsterId: bandit.id, itemId: banditTrinket.id, dropChance: 15, minQuantity: 1, maxQuantity: 1 },
     { monsterId: wolf.id, itemId: wolfPelt.id, dropChance: 50, minQuantity: 1, maxQuantity: 1 },
     { monsterId: ghoul.id, itemId: ghoulIchor.id, dropChance: 40, minQuantity: 1, maxQuantity: 1 },
-    { monsterId: ghoul.id, itemId: rustyBolts.id, dropChance: 60, minQuantity: 1, maxQuantity: 3 },
-    { monsterId: mutant.id, itemId: mutantGland.id, dropChance: 35, minQuantity: 1, maxQuantity: 1 },
-    { monsterId: mutant.id, itemId: scrapMetal.id, dropChance: 80, minQuantity: 2, maxQuantity: 4 },
+    { monsterId: ghoul.id, itemId: bentNails.id, dropChance: 60, minQuantity: 1, maxQuantity: 3 },
+    { monsterId: bogTroll.id, itemId: trollFat.id, dropChance: 35, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: bogTroll.id, itemId: ironScraps.id, dropChance: 80, minQuantity: 2, maxQuantity: 4 },
   ];
 
   for (const entry of lootTable) {
@@ -183,20 +198,20 @@ async function main() {
   console.log('Monster loot tables seeded.');
 
   // --- Locations ---
-  const abandonedCityData = {
+  const ruinedHamletData = {
     id: 1,
-    name: 'Abandoned City',
-    description: 'A ruined city overrun by bandits and stray animals.',
+    name: 'Ruined Hamlet',
+    description: 'A fallen village overrun by bandits and feral hounds.',
     minLevel: 1,
     mapX: 1,
     mapY: 2,
     gridWidth: 3,
     gridHeight: 3,
   };
-  const abandonedCity = await prisma.location.upsert({
+  const ruinedHamlet = await prisma.location.upsert({
     where: { id: 1 },
-    update: abandonedCityData,
-    create: abandonedCityData,
+    update: ruinedHamletData,
+    create: ruinedHamletData,
   });
 
   const darkForestData = {
@@ -215,40 +230,40 @@ async function main() {
     create: darkForestData,
   });
 
-  const wastelandData = {
+  const cursedMoorData = {
     id: 3,
-    name: 'Toxic Wasteland',
-    description: 'A radioactive wasteland filled with mutated horrors.',
+    name: 'Cursed Moor',
+    description: 'A blighted moor twisted by dark magic, home to corrupted beasts.',
     minLevel: 10,
     mapX: 5,
     mapY: 3,
     gridWidth: 3,
     gridHeight: 2,
   };
-  const wasteland = await prisma.location.upsert({
+  const cursedMoor = await prisma.location.upsert({
     where: { id: 3 },
-    update: wastelandData,
-    create: wastelandData,
+    update: cursedMoorData,
+    create: cursedMoorData,
   });
 
-  console.log(`Locations seeded: ${[abandonedCity, darkForest, wasteland].map((l) => l.name).join(', ')}`);
+  console.log(`Locations seeded: ${[ruinedHamlet, darkForest, cursedMoor].map((l) => l.name).join(', ')}`);
 
-  // --- Sub-Locations: Abandoned City (3x3 grid) ---
-  const cityGatesData = {
+  // --- Sub-Locations: Ruined Hamlet (3x3 grid) ---
+  const hamletGateData = {
     id: 1,
-    locationId: abandonedCity.id,
-    name: 'City Gates',
-    description: 'The entrance to the abandoned city. Relatively safe.',
+    locationId: ruinedHamlet.id,
+    name: 'Hamlet Gate',
+    description: 'The entrance to the ruined hamlet. Relatively safe.',
     kind: 'SAFE' as const,
     minLevel: 1,
     gridX: 1,
     gridY: 0,
   };
-  const cityGates = await prisma.subLocation.upsert({ where: { id: 1 }, update: cityGatesData, create: cityGatesData });
+  const hamletGate = await prisma.subLocation.upsert({ where: { id: 1 }, update: hamletGateData, create: hamletGateData });
 
   const tradingPostData = {
     id: 9,
-    locationId: abandonedCity.id,
+    locationId: ruinedHamlet.id,
     name: 'Trading Post',
     description: 'A makeshift merchant stall selling salvaged gear.',
     kind: 'SHOP' as const,
@@ -258,29 +273,29 @@ async function main() {
   };
   const tradingPost = await prisma.subLocation.upsert({ where: { id: 9 }, update: tradingPostData, create: tradingPostData });
 
-  const cityOutskirtsData = {
+  const outskirtsData = {
     id: 2,
-    locationId: abandonedCity.id,
-    name: 'City Outskirts',
-    description: 'The outskirts are prowled by stray dogs.',
+    locationId: ruinedHamlet.id,
+    name: 'Outskirts',
+    description: 'The outskirts are prowled by feral hounds.',
     kind: 'DANGER' as const,
     minLevel: 1,
     gridX: 0,
     gridY: 2,
   };
-  const cityOutskirts = await prisma.subLocation.upsert({ where: { id: 2 }, update: cityOutskirtsData, create: cityOutskirtsData });
+  const outskirts = await prisma.subLocation.upsert({ where: { id: 2 }, update: outskirtsData, create: outskirtsData });
 
-  const cityCenterData = {
+  const villageSquareData = {
     id: 3,
-    locationId: abandonedCity.id,
-    name: 'City Center',
+    locationId: ruinedHamlet.id,
+    name: 'Village Square',
     description: 'Bandits have made this their home.',
     kind: 'DANGER' as const,
     minLevel: 3,
     gridX: 2,
     gridY: 2,
   };
-  const cityCenter = await prisma.subLocation.upsert({ where: { id: 3 }, update: cityCenterData, create: cityCenterData });
+  const villageSquare = await prisma.subLocation.upsert({ where: { id: 3 }, update: villageSquareData, create: villageSquareData });
 
   // --- Sub-Locations: Dark Forest (3x3 grid) ---
   const forestEdgeData = {
@@ -294,6 +309,18 @@ async function main() {
     gridY: 0,
   };
   const forestEdge = await prisma.subLocation.upsert({ where: { id: 4 }, update: forestEdgeData, create: forestEdgeData });
+
+  const woodlandTradingPostData = {
+    id: 10,
+    locationId: darkForest.id,
+    name: 'Woodland Trading Post',
+    description: 'A traveling smith who trades in steel and salvage.',
+    kind: 'SHOP' as const,
+    minLevel: 5,
+    gridX: 1,
+    gridY: 1,
+  };
+  const woodlandTradingPost = await prisma.subLocation.upsert({ where: { id: 10 }, update: woodlandTradingPostData, create: woodlandTradingPostData });
 
   const deepForestData = {
     id: 5,
@@ -319,33 +346,59 @@ async function main() {
   };
   const forestRuins = await prisma.subLocation.upsert({ where: { id: 6 }, update: forestRuinsData, create: forestRuinsData });
 
-  // --- Sub-Locations: Toxic Wasteland (3x2 grid) ---
-  const wastelandCampData = {
+  // --- Sub-Locations: Cursed Moor (3x2 grid) ---
+  const pilgrimsRestData = {
     id: 7,
-    locationId: wasteland.id,
-    name: 'Survivor Camp',
-    description: 'A small camp of survivors. Safe to rest.',
+    locationId: cursedMoor.id,
+    name: "Pilgrim's Rest",
+    description: 'A small camp of pilgrims. Safe to rest.',
     kind: 'SAFE' as const,
     minLevel: 10,
     gridX: 1,
     gridY: 0,
   };
-  const wastelandCamp = await prisma.subLocation.upsert({ where: { id: 7 }, update: wastelandCampData, create: wastelandCampData });
+  const pilgrimsRest = await prisma.subLocation.upsert({ where: { id: 7 }, update: pilgrimsRestData, create: pilgrimsRestData });
 
-  const wastelandZoneData = {
+  const moorTradingPostData = {
+    id: 11,
+    locationId: cursedMoor.id,
+    name: 'Moor Trading Post',
+    description: 'A grim trader who deals in relics of fallen knights.',
+    kind: 'SHOP' as const,
+    minLevel: 10,
+    gridX: 2,
+    gridY: 0,
+  };
+  const moorTradingPost = await prisma.subLocation.upsert({ where: { id: 11 }, update: moorTradingPostData, create: moorTradingPostData });
+
+  const blightedMarshData = {
     id: 8,
-    locationId: wasteland.id,
-    name: 'Contaminated Zone',
-    description: 'Mutants roam this toxic hellscape.',
+    locationId: cursedMoor.id,
+    name: 'Blighted Marsh',
+    description: 'Corrupted beasts roam this cursed hellscape.',
     kind: 'DANGER' as const,
     minLevel: 10,
     gridX: 1,
     gridY: 1,
   };
-  const wastelandZone = await prisma.subLocation.upsert({ where: { id: 8 }, update: wastelandZoneData, create: wastelandZoneData });
+  const blightedMarsh = await prisma.subLocation.upsert({ where: { id: 8 }, update: blightedMarshData, create: blightedMarshData });
 
   console.log(
-    `Sub-locations seeded: ${[cityGates, tradingPost, cityOutskirts, cityCenter, forestEdge, deepForest, forestRuins, wastelandCamp, wastelandZone].map((s) => s.name).join(', ')}`,
+    `Sub-locations seeded: ${[
+      hamletGate,
+      tradingPost,
+      outskirts,
+      villageSquare,
+      forestEdge,
+      woodlandTradingPost,
+      deepForest,
+      forestRuins,
+      pilgrimsRest,
+      moorTradingPost,
+      blightedMarsh,
+    ]
+      .map((s) => s.name)
+      .join(', ')}`,
   );
 
   // Explicit ids were used above so upserts stay stable across reseeds; keep the
@@ -353,24 +406,59 @@ async function main() {
   await prisma.$executeRawUnsafe(`SELECT setval('"Location_id_seq"', (SELECT MAX(id) FROM "Location"))`);
   await prisma.$executeRawUnsafe(`SELECT setval('"SubLocation_id_seq"', (SELECT MAX(id) FROM "SubLocation"))`);
 
+  // --- Shop listings ---
+  const shopStock: { subLocationId: number; equipmentName: string }[] = [
+    // Trading Post (Ruined Hamlet, Lv1): tier-1 weapons + starter armor.
+    { subLocationId: tradingPost.id, equipmentName: 'Rusty Sword' },
+    { subLocationId: tradingPost.id, equipmentName: 'Hand Axe' },
+    { subLocationId: tradingPost.id, equipmentName: 'Training Rapier' },
+    { subLocationId: tradingPost.id, equipmentName: 'Leather Cap' },
+    { subLocationId: tradingPost.id, equipmentName: 'Leather Jerkin' },
+    { subLocationId: tradingPost.id, equipmentName: 'Leather Trousers' },
+    { subLocationId: tradingPost.id, equipmentName: 'Worn Leather Gloves' },
+    // Woodland Trading Post (Dark Forest, Lv5): tier-2 weapons + Steel Helm.
+    { subLocationId: woodlandTradingPost.id, equipmentName: 'Steel Sword' },
+    { subLocationId: woodlandTradingPost.id, equipmentName: 'War Axe' },
+    { subLocationId: woodlandTradingPost.id, equipmentName: "Duelist's Rapier" },
+    { subLocationId: woodlandTradingPost.id, equipmentName: 'Steel Helm' },
+    // Moor Trading Post (Cursed Moor, Lv10): tier-3 weapons + Plate Armor.
+    { subLocationId: moorTradingPost.id, equipmentName: "Knight's Longsword" },
+    { subLocationId: moorTradingPost.id, equipmentName: "Executioner's Axe" },
+    { subLocationId: moorTradingPost.id, equipmentName: 'Silver Rapier' },
+    { subLocationId: moorTradingPost.id, equipmentName: 'Plate Armor' },
+  ];
+
+  const equipmentByName = new Map((await prisma.equipmentItem.findMany()).map((e) => [e.name, e]));
+  for (const entry of shopStock) {
+    const item = equipmentByName.get(entry.equipmentName);
+    if (!item) throw new Error(`Unknown equipment in shop stock: ${entry.equipmentName}`);
+    await prisma.shopListing.upsert({
+      where: { subLocationId_equipmentItemId: { subLocationId: entry.subLocationId, equipmentItemId: item.id } },
+      update: {},
+      create: { subLocationId: entry.subLocationId, equipmentItemId: item.id },
+    });
+  }
+
+  console.log('Shop listings seeded.');
+
   // --- Monster Spawns ---
-  // City Outskirts: Stray Dogs (high weight) + Bandits (low weight)
+  // Outskirts: Feral Hounds (high weight) + Bandits (low weight)
   await prisma.subLocationMonster.upsert({
-    where: { subLocationId_monsterId: { subLocationId: cityOutskirts.id, monsterId: strayDog.id } },
+    where: { subLocationId_monsterId: { subLocationId: outskirts.id, monsterId: feralHound.id } },
     update: {},
-    create: { subLocationId: cityOutskirts.id, monsterId: strayDog.id, spawnWeight: 80 },
+    create: { subLocationId: outskirts.id, monsterId: feralHound.id, spawnWeight: 80 },
   });
   await prisma.subLocationMonster.upsert({
-    where: { subLocationId_monsterId: { subLocationId: cityOutskirts.id, monsterId: bandit.id } },
+    where: { subLocationId_monsterId: { subLocationId: outskirts.id, monsterId: bandit.id } },
     update: {},
-    create: { subLocationId: cityOutskirts.id, monsterId: bandit.id, spawnWeight: 20 },
+    create: { subLocationId: outskirts.id, monsterId: bandit.id, spawnWeight: 20 },
   });
 
-  // City Center: Bandits only
+  // Village Square: Bandits only
   await prisma.subLocationMonster.upsert({
-    where: { subLocationId_monsterId: { subLocationId: cityCenter.id, monsterId: bandit.id } },
+    where: { subLocationId_monsterId: { subLocationId: villageSquare.id, monsterId: bandit.id } },
     update: {},
-    create: { subLocationId: cityCenter.id, monsterId: bandit.id, spawnWeight: 100 },
+    create: { subLocationId: villageSquare.id, monsterId: bandit.id, spawnWeight: 100 },
   });
 
   // Deep Forest: Wolves
@@ -392,11 +480,11 @@ async function main() {
     create: { subLocationId: forestRuins.id, monsterId: wolf.id, spawnWeight: 30 },
   });
 
-  // Contaminated Zone: Mutants
+  // Blighted Marsh: Bog Trolls
   await prisma.subLocationMonster.upsert({
-    where: { subLocationId_monsterId: { subLocationId: wastelandZone.id, monsterId: mutant.id } },
+    where: { subLocationId_monsterId: { subLocationId: blightedMarsh.id, monsterId: bogTroll.id } },
     update: {},
-    create: { subLocationId: wastelandZone.id, monsterId: mutant.id, spawnWeight: 100 },
+    create: { subLocationId: blightedMarsh.id, monsterId: bogTroll.id, spawnWeight: 100 },
   });
 
   console.log('Monster spawns seeded.');

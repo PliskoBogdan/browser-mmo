@@ -68,6 +68,13 @@ model EquipmentItem {
   description String?
   sellValue   Int           @default(0)
 
+  // Shop metadata: price to buy, minimum character level required to equip
+  // (an item can be bought ahead of that level but not worn until then), and
+  // an optional MDI icon override (weapons only; armor falls back to slot icon).
+  price    Int     @default(0)
+  minLevel Int     @default(1)
+  icon     String?
+
   strength       Int @default(0)
   agility        Int @default(0)
   accuracy       Int @default(0)
@@ -78,7 +85,8 @@ model EquipmentItem {
   baseDamage  Int   @default(0) // weapon contribution to attack damage
   attackSpeed Float? // weapon only; null for armor
 
-  owners UserEquipment[]
+  owners       UserEquipment[]
+  shopListings ShopListing[]
 }
 
 // Gear a player owns; `equipped` marks it as active in its slot. At most one
@@ -135,10 +143,24 @@ model SubLocation {
   gridX Int
   gridY Int
 
-  monsters SubLocationMonster[]
-  battles  Battle[]
+  monsters     SubLocationMonster[]
+  battles      Battle[]
+  shopListings ShopListing[]
 
   @@unique([locationId, gridX, gridY])
+}
+
+// What a given SHOP sub-location has for sale. Price/minLevel live on the
+// EquipmentItem itself; this table is just the catalog assignment.
+model ShopListing {
+  id              Int @id @default(autoincrement())
+  subLocationId   Int
+  equipmentItemId Int
+
+  subLocation   SubLocation   @relation(fields: [subLocationId], references: [id])
+  equipmentItem EquipmentItem @relation(fields: [equipmentItemId], references: [id])
+
+  @@unique([subLocationId, equipmentItemId])
 }
 
 enum SubLocationKind {

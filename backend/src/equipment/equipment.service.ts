@@ -29,6 +29,8 @@ export class EquipmentService {
         slot: item.slot as EquipmentSlot,
         rarity: item.rarity,
         description: item.description,
+        icon: item.icon,
+        minLevel: item.minLevel,
         baseDamage: item.baseDamage,
         attackSpeed: item.attackSpeed,
         sellValue: item.sellValue,
@@ -45,6 +47,12 @@ export class EquipmentService {
     });
     if (!owned || owned.userId !== userId) throw new NotFoundException("You don't own that item.");
     if (owned.equipped) throw new BadRequestException('That item is already equipped.');
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { level: true } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.level < owned.equipmentItem.minLevel) {
+      throw new ForbiddenException(`Requires level ${owned.equipmentItem.minLevel}.`);
+    }
 
     await this.assertNoActiveBattle(userId);
 

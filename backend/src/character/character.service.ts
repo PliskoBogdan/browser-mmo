@@ -198,6 +198,8 @@ export class CharacterService {
       slot: item.slot as EquipmentSlot,
       rarity: item.rarity,
       description: item.description,
+      icon: item.icon,
+      minLevel: item.minLevel,
       baseDamage: item.baseDamage,
       attackSpeed: item.attackSpeed,
       modifiers,

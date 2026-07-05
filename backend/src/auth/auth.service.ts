@@ -5,8 +5,8 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CharacterService } from '../character/character.service';
 
-const STARTING_WEAPON_NAME = 'Pistol';
-const STARTING_ARMOR_NAMES = ['Scout Helmet', 'Basic Body Armor', 'Lightweight Pants', 'Combat Gloves'];
+const STARTING_WEAPON_NAME = 'Rusty Sword';
+const STARTING_ARMOR_NAMES = ['Leather Cap', 'Leather Jerkin', 'Leather Trousers', 'Worn Leather Gloves'];
 
 @Injectable()
 export class AuthService {

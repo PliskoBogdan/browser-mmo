@@ -117,13 +117,27 @@
           <v-card-text>
             <v-row dense>
               <v-col v-for="slot in EQUIPMENT_SLOTS" :key="slot" cols="12" sm="6" md="4" lg="2">
-                <v-card variant="outlined" class="h-100" :style="equippedStyle(slot)">
+                <v-card
+                  variant="outlined"
+                  class="h-100 equip-slot"
+                  :class="slotClasses(slot)"
+                  :style="equippedStyle(slot)"
+                  :draggable="!!character.equipment[slot]"
+                  @dragstart="character.equipment[slot] && onSlotDragStart(character.equipment[slot]!.ownedId, slot)"
+                  @dragend="uiStore.endDrag()"
+                  @dragover.prevent="dragOverSlot = slot"
+                  @dragleave="dragOverSlot = null"
+                  @drop="onDropOnSlot(slot)"
+                >
                   <v-card-text class="pa-3">
                     <div class="text-overline text-medium-emphasis d-flex align-center">
                       <v-icon size="16" class="mr-1">{{ SLOT_META[slot].icon }}</v-icon>{{ SLOT_META[slot].label }}
                     </div>
                     <template v-if="character.equipment[slot]">
-                      <div class="font-weight-bold text-body-2 mt-1">{{ character.equipment[slot]!.name }}</div>
+                      <div class="d-flex align-center mt-1">
+                        <v-icon size="16" class="mr-1">{{ character.equipment[slot]!.icon ?? SLOT_META[slot].icon }}</v-icon>
+                        <span class="font-weight-bold text-body-2">{{ character.equipment[slot]!.name }}</span>
+                      </div>
                       <div v-if="character.equipment[slot]!.baseDamage" class="text-caption text-error">{{ character.equipment[slot]!.baseDamage }} dmg</div>
                       <div class="mt-1">
                         <v-chip
@@ -153,33 +167,10 @@
                 </v-card>
               </v-col>
             </v-row>
-
-            <!-- Unequipped gear -->
-            <template v-if="unequippedGear.length">
-              <v-divider class="my-4" />
-              <div class="text-overline text-medium-emphasis mb-2">Your Gear</div>
-              <v-row dense>
-                <v-col v-for="g in unequippedGear" :key="g.ownedId" cols="12" sm="6" md="4">
-                  <v-card variant="tonal" :style="{ borderLeft: `4px solid ${rarityColor(g.rarity)}` }">
-                    <v-card-text class="pa-3">
-                      <div class="d-flex justify-space-between align-center">
-                        <span class="font-weight-bold text-body-2">{{ g.name }}</span>
-                        <v-chip size="x-small" variant="outlined">{{ SLOT_META[g.slot].label }}</v-chip>
-                      </div>
-                      <div v-if="g.baseDamage" class="text-caption text-error">{{ g.baseDamage }} dmg</div>
-                      <div class="mt-1">
-                        <v-chip v-for="(val, key) in g.modifiers" :key="key" size="x-small" class="mr-1 mb-1" :color="(val ?? 0) > 0 ? 'success' : 'error'" variant="tonal">
-                          {{ signed(val ?? 0) }} {{ STAT_META[key as CoreStat].label }}
-                        </v-chip>
-                      </div>
-                      <v-btn size="x-small" color="primary" variant="tonal" class="mt-1" :disabled="busy" @click="run(() => characterStore.equip(g.ownedId))">
-                        Equip
-                      </v-btn>
-                    </v-card-text>
-                  </v-card>
-                </v-col>
-              </v-row>
-            </template>
+            <div class="text-caption text-medium-emphasis mt-3">
+              <v-icon size="14" class="mr-1">mdi-bag-personal</v-icon>
+              Drag gear from the Inventory window (bottom-right) onto a matching slot, or use its Equip button.
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -222,38 +213,6 @@
           </v-card-text>
         </v-card>
       </v-col>
-
-      <!-- Loot inventory -->
-      <v-col cols="12">
-        <v-card elevation="4">
-          <v-card-title>
-            <v-icon class="mr-2" color="accent">mdi-bag-personal</v-icon>
-            Inventory
-          </v-card-title>
-          <v-card-text>
-            <div v-if="inventoryStore.loading" class="d-flex justify-center py-6">
-              <v-progress-circular indeterminate color="primary" />
-            </div>
-            <div v-else-if="!inventoryStore.items.length" class="text-medium-emphasis text-body-2 py-2">
-              Nothing here yet — loot from monsters will show up in your backpack. Visit a Trading Post to sell it for gold.
-            </div>
-            <v-row v-else dense>
-              <v-col v-for="entry in inventoryStore.items" :key="entry.itemId" cols="12" sm="6" md="4">
-                <v-card variant="tonal" :style="{ borderLeft: `4px solid ${rarityColor(entry.rarity)}` }">
-                  <v-card-text class="pa-3">
-                    <div class="d-flex justify-space-between align-center">
-                      <span class="font-weight-bold">{{ entry.name }}</span>
-                      <v-chip size="x-small" variant="tonal">x{{ entry.quantity }}</v-chip>
-                    </div>
-                    <div v-if="entry.description" class="text-caption text-medium-emphasis mt-1">{{ entry.description }}</div>
-                    <div class="text-caption text-warning mt-1">{{ entry.sellValue }}g each</div>
-                  </v-card-text>
-                </v-card>
-              </v-col>
-            </v-row>
-          </v-card-text>
-        </v-card>
-      </v-col>
     </v-row>
 
     <v-skeleton-loader v-else-if="characterStore.loading" type="card, card" />
@@ -266,7 +225,7 @@ import { CORE_STATS, EQUIPMENT_SLOTS, type CoreStat, type EquipmentSlot } from '
 definePageMeta({ middleware: 'auth' });
 
 const characterStore = useCharacterStore();
-const inventoryStore = useInventoryStore();
+const uiStore = useUiStore();
 const { character } = storeToRefs(characterStore);
 
 const busy = ref(false);
@@ -281,14 +240,42 @@ const STAT_META: Record<CoreStat, { label: string; icon: string }> = {
 };
 
 const SLOT_META: Record<EquipmentSlot, { label: string; icon: string }> = {
-  WEAPON: { label: 'Weapon', icon: 'mdi-pistol' },
+  WEAPON: { label: 'Weapon', icon: 'mdi-sword' },
   HELMET: { label: 'Helmet', icon: 'mdi-hard-hat' },
   BODY: { label: 'Body', icon: 'mdi-tshirt-crew' },
   PANTS: { label: 'Pants', icon: 'mdi-human-handsdown' },
   GLOVES: { label: 'Gloves', icon: 'mdi-hand-back-right' },
 };
 
-const unequippedGear = computed(() => characterStore.gear.filter((g) => !g.equipped));
+// --- Drag-and-drop equip (alternative to the Equip button in the Inventory window) ---
+// Dragging OUT of an occupied slot (source: 'slot') is picked up by the
+// InventoryWindow's drop zone, which unequips it — see components/InventoryWindow.vue.
+const dragOverSlot = ref<EquipmentSlot | null>(null);
+
+function onSlotDragStart(ownedId: number, slot: EquipmentSlot) {
+  uiStore.startDrag({ ownedId, slot, source: 'slot' });
+}
+
+// Highlights the one matching slot as soon as a bag item starts dragging (not
+// just on hover), and dims the rest so it's obvious where the item can go.
+function slotClasses(slot: EquipmentSlot) {
+  const dragged = uiStore.draggedGear;
+  if (!dragged || dragged.source !== 'bag') return {};
+  const isMatch = dragged.slot === slot;
+  return {
+    'dropzone-valid': isMatch,
+    'dropzone-invalid': !isMatch,
+    'dropzone-hover': isMatch && dragOverSlot.value === slot,
+  };
+}
+
+function onDropOnSlot(slot: EquipmentSlot) {
+  dragOverSlot.value = null;
+  const dragged = uiStore.draggedGear;
+  uiStore.endDrag();
+  if (!dragged || dragged.source !== 'bag' || dragged.slot !== slot || busy.value) return;
+  run(() => characterStore.equip(dragged.ownedId));
+}
 
 const combatSummary = computed(() => {
   const char = character.value;
@@ -333,6 +320,21 @@ onMounted(() => {
   characterStore.fetch();
   characterStore.fetchGear();
   characterStore.fetchPerks();
-  inventoryStore.fetchInventory();
 });
 </script>
+
+<style scoped>
+.equip-slot {
+  transition: outline-color 0.15s ease, opacity 0.15s ease;
+}
+.dropzone-valid {
+  outline: 2px dashed rgb(var(--v-theme-success));
+  outline-offset: 2px;
+}
+.dropzone-hover {
+  background-color: rgba(var(--v-theme-success), 0.12);
+}
+.dropzone-invalid {
+  opacity: 0.45;
+}
+</style>

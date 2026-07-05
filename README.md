@@ -16,3 +16,8 @@ SEEDS
 
 BD
 - docker compose up -d
+
+
+### 05.07.2026
+How rift looks like
+![rift_screen](screens/image-1.png)

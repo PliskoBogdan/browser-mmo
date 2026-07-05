@@ -1,5 +1,6 @@
 <template>
   <v-app>
+    <CharacterBar :character="character" />
     <v-navigation-drawer v-model="drawer" :rail="rail" permanent>
       <v-list-item prepend-icon="mdi-skull-crossbones" title="MMO RPG" nav>
         <template #append>
@@ -20,7 +21,9 @@
           :prepend-icon="item.icon"
           :title="item.title"
           :to="item.to"
-          :active="route.path === item.to || route.path.startsWith(item.to + '/')"
+          :active="
+            route.path === item.to || route.path.startsWith(item.to + '/')
+          "
           color="primary"
           rounded="lg"
         />
@@ -40,13 +43,6 @@
     </v-navigation-drawer>
 
     <v-main>
-      <v-progress-linear
-        :model-value="character ? (character.hp / character.maxHp) * 100 : 0"
-        color="error"
-        bg-color="surface"
-        height="10"
-        rounded
-      />
       <v-container fluid class="pa-6">
         <slot />
       </v-container>

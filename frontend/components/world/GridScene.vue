@@ -48,15 +48,15 @@
         @pointerleave="hoveredKey = null"
       />
 
-      <!-- Chest prop: a small model instead of just a colored floor tile. -->
-      <TresGroup v-for="tile in chestTiles" :key="`chest-${tile.x}-${tile.y}`" :position="vec3(worldX(tile.x), 0.2, worldZ(tile.y))">
-        <TresMesh :geometry="chestBaseGeometry" :material="tile.kind === 'CHEST_OPENED' ? chestOpenedMaterial : chestBaseMaterial" />
-        <TresMesh
-          :position="vec3(0, 0.14, tile.kind === 'CHEST_OPENED' ? -0.09 : -0.02)"
-          :rotation-x="tile.kind === 'CHEST_OPENED' ? -1.1 : 0"
-          :geometry="chestLidGeometry"
-          :material="tile.kind === 'CHEST_OPENED' ? chestOpenedMaterial : chestLidMaterial"
-        />
+      <!-- Chest prop: a basicchest.glb model with a skinned lid bone that
+           swings open once emptied. -->
+      <TresGroup
+        v-for="entry in chestProps"
+        :key="`chest-${entry.tile.x}-${entry.tile.y}`"
+        :position="vec3(worldX(entry.tile.x), CHEST_GROUP_Y, worldZ(entry.tile.y))"
+        :scale="vec3(CHEST_SCALE, CHEST_SCALE, CHEST_SCALE)"
+      >
+        <primitive :object="entry.object" />
       </TresGroup>
 
       <!-- Boss marker: a small flickering campfire + warm point light, so the
@@ -91,8 +91,9 @@
 
 <script setup lang="ts">
 import * as THREE from 'three';
+import { SkeletonUtils } from 'three-stdlib';
 import { TresCanvas } from '@tresjs/core';
-import { OrbitControls, Html } from '@tresjs/cientos';
+import { OrbitControls, Html, useGLTF } from '@tresjs/cientos';
 import gsap from 'gsap';
 
 export type TileKind =
@@ -290,12 +291,55 @@ const shadowGeometry = new THREE.CircleGeometry(0.32, 16);
 const tokenBodyGeometry = new THREE.CapsuleGeometry(0.22, 0.32, 4, 8);
 const tokenHeadGeometry = new THREE.ConeGeometry(0.17, 0.32, 8);
 
-// Chest prop: a base box + a lid box that tilts open once emptied.
-const chestBaseGeometry = new THREE.BoxGeometry(0.32, 0.22, 0.24);
-const chestLidGeometry = new THREE.BoxGeometry(0.34, 0.1, 0.26);
-const chestBaseMaterial = new THREE.MeshStandardMaterial({ color: '#6b4423', roughness: 0.7 });
-const chestLidMaterial = new THREE.MeshStandardMaterial({ color: '#8a5a2e', roughness: 0.6, metalness: 0.15 });
-const chestOpenedMaterial = new THREE.MeshStandardMaterial({ color: '#3a3226', roughness: 0.9 });
+// Chest prop: basicchest.glb, a rigged model whose lid is a SkinnedMesh
+// driven by a single hinge bone ("Bone_1"). Loaded once per component
+// instance; each chest tile gets its own SkeletonUtils clone -- a plain
+// THREE.Object3D.clone(true) does NOT duplicate a skinned mesh's skeleton
+// (all clones would keep sharing and fighting over the same bone objects).
+const { state: chestGltf } = useGLTF('/models/basicchest.glb');
+const CHEST_SCALE = 0.27;
+const FLOOR_TOP = 0.09; // tileGeometry height / 2
+// The model's authored bounding box sits ~0.049 units below its own origin;
+// offset the group so the chest's bottom lands exactly on the floor surface.
+const CHEST_GROUP_Y = FLOOR_TOP + 0.04925 * CHEST_SCALE;
+// Relative hinge rotation that swings the lid up and back and away from the
+// chest body -- verified against the model's actual skin weights; positive
+// values instead rotate the lid down into the body.
+const CHEST_LID_OPEN_ANGLE = -1.1;
+
+// Cached per tile key so re-renders (triggered on every player move) reuse
+// the existing clone instead of re-cloning the GLTF scene each time; only
+// rebuilt when that tile's kind actually changes (CHEST -> CHEST_OPENED).
+const chestObjectCache = new Map<string, { kind: TileKind; object: THREE.Object3D }>();
+
+function buildChestObject(kind: TileKind): THREE.Object3D {
+  const clone = SkeletonUtils.clone(chestGltf.value!.scene) as THREE.Object3D;
+  if (kind === 'CHEST_OPENED') {
+    clone.getObjectByName('Bone_1')?.rotateX(CHEST_LID_OPEN_ANGLE);
+    // Darkened to read as emptied, matching the old procedural chest's look.
+    clone.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const material = (child.material as THREE.MeshStandardMaterial).clone();
+      material.color.multiplyScalar(0.45);
+      child.material = material;
+    });
+  }
+  return clone;
+}
+
+function chestObjectFor(tile: GridTile): THREE.Object3D | null {
+  if (!chestGltf.value) return null;
+  const key = cellKey(tile.x, tile.y);
+  const cached = chestObjectCache.get(key);
+  if (cached && cached.kind === tile.kind) return cached.object;
+  const object = buildChestObject(tile.kind);
+  chestObjectCache.set(key, { kind: tile.kind, object });
+  return object;
+}
+
+const chestProps = computed(() =>
+  chestTiles.value.map((tile) => ({ tile, object: chestObjectFor(tile) })).filter((entry): entry is { tile: GridTile; object: THREE.Object3D } => entry.object !== null),
+);
 
 // Boss marker: a small campfire cluster (outer + two inner flame cones),
 // scaled by fireFlicker for a flame-like animation, lighting the arena via

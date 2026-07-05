@@ -16,6 +16,7 @@
     "nuxt": "^3.15.4",
     "pinia": "^2.3.1",
     "three": "^0.185.1",
+    "three-stdlib": "^2.36.1",
     "vite-plugin-vuetify": "^2.1.1",
     "vuetify": "^3.8.4"
   },

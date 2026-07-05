@@ -59,8 +59,15 @@
         />
       </TresGroup>
 
-      <!-- Boss marker: a glowing spike over the arena tile. -->
-      <TresMesh v-for="tile in bossTiles" :key="`boss-${tile.x}-${tile.y}`" :position="vec3(worldX(tile.x), 0.42, worldZ(tile.y))" :geometry="bossSpikeGeometry" :material="bossSpikeMaterial" />
+      <!-- Boss marker: a small flickering campfire + warm point light, so the
+           whole arena reads as lit by it (the ember floor/walls pick up the
+           flicker through real lighting, no material animation needed). -->
+      <TresGroup v-for="tile in bossTiles" :key="`boss-fire-${tile.x}-${tile.y}`" :position="vec3(worldX(tile.x), 0, worldZ(tile.y))">
+        <TresPointLight :position="vec3(0, 0.55, 0)" :intensity="1.6 * fireFlicker" color="#ff8a3d" :distance="4.5" />
+        <TresMesh :position="vec3(0, 0.16, 0)" :scale="vec3(fireFlicker, fireFlicker * 1.15, fireFlicker)" :geometry="fireOuterGeometry" :material="fireOuterMaterial" />
+        <TresMesh :position="vec3(0.07, 0.12, 0.04)" :scale="vec3(fireFlicker * 0.8, fireFlicker * 0.95, fireFlicker * 0.8)" :geometry="fireInnerGeometry" :material="fireInnerMaterial" />
+        <TresMesh :position="vec3(-0.06, 0.1, -0.03)" :scale="vec3(fireFlicker * 0.65, fireFlicker * 0.8, fireFlicker * 0.65)" :geometry="fireInnerGeometry" :material="fireCoreMaterial" />
+      </TresGroup>
 
       <Html
         v-for="tile in labelledCells"
@@ -168,6 +175,34 @@ const cells = computed<GridTile[]>(() => {
 const labelledCells = computed(() => cells.value.filter((t) => t.kind !== 'EMPTY' && t.label));
 const chestTiles = computed(() => cells.value.filter((t) => t.kind === 'CHEST' || t.kind === 'CHEST_OPENED'));
 const bossTiles = computed(() => cells.value.filter((t) => t.kind === 'BOSS'));
+// The room containing the boss (if any explored) gets an ember-lit look
+// instead of the normal room palette — the room itself reads as special,
+// not just the tile the boss stands on.
+const bossRoomId = computed<number | null>(() => bossTiles.value[0]?.roomId ?? null);
+
+// Low-frequency flicker (not a 60fps loop) driving the campfire scale/light
+// intensity — cheap enough to run continuously without fighting the
+// renderer's on-demand mode, and only ticks while a boss is actually visible.
+const fireFlicker = ref(1);
+let fireFlickerInterval: ReturnType<typeof setInterval> | null = null;
+watch(
+  () => bossTiles.value.length > 0,
+  (hasBoss) => {
+    if (hasBoss && !fireFlickerInterval) {
+      fireFlickerInterval = setInterval(() => {
+        fireFlicker.value = 0.75 + Math.random() * 0.5;
+      }, 130);
+    } else if (!hasBoss && fireFlickerInterval) {
+      clearInterval(fireFlickerInterval);
+      fireFlickerInterval = null;
+      fireFlicker.value = 1;
+    }
+  },
+  { immediate: true },
+);
+onUnmounted(() => {
+  if (fireFlickerInterval) clearInterval(fireFlickerInterval);
+});
 
 // Room grouping: one floor plate + 4 perimeter walls per roomId, sized to
 // that room's bounding box (rooms are always solid rectangles). Shared unit
@@ -179,6 +214,9 @@ const ROOM_WALL_THICKNESS = 0.1;
 const roomPlateGeometry = new THREE.BoxGeometry(1, 0.06, 1);
 const roomWallGeometry = new THREE.BoxGeometry(1, 1, 1);
 const roomMaterials = ROOM_PALETTE.map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 }));
+// The boss's room gets this instead of a palette color — a dark ember tone
+// that the flickering campfire light plays across, rather than a flat tint.
+const bossRoomMaterial = new THREE.MeshStandardMaterial({ color: '#3d1310', roughness: 0.8, metalness: 0.05, emissive: '#2a0805', emissiveIntensity: 0.4 });
 
 interface RoomBounds {
   roomId: number;
@@ -203,7 +241,7 @@ const roomBounds = computed<RoomBounds[]>(() => {
     maxX: Math.max(...pts.map((p) => p.x)),
     minY: Math.min(...pts.map((p) => p.y)),
     maxY: Math.max(...pts.map((p) => p.y)),
-    material: roomMaterials[roomId % roomMaterials.length],
+    material: roomId === bossRoomId.value ? bossRoomMaterial : roomMaterials[roomId % roomMaterials.length],
   }));
 });
 
@@ -259,9 +297,14 @@ const chestBaseMaterial = new THREE.MeshStandardMaterial({ color: '#6b4423', rou
 const chestLidMaterial = new THREE.MeshStandardMaterial({ color: '#8a5a2e', roughness: 0.6, metalness: 0.15 });
 const chestOpenedMaterial = new THREE.MeshStandardMaterial({ color: '#3a3226', roughness: 0.9 });
 
-// Boss marker: a glowing spike so the arena reads as dangerous from a distance.
-const bossSpikeGeometry = new THREE.ConeGeometry(0.28, 0.6, 5);
-const bossSpikeMaterial = new THREE.MeshStandardMaterial({ color: '#c81e3a', emissive: '#5a0512', emissiveIntensity: 0.5, roughness: 0.4 });
+// Boss marker: a small campfire cluster (outer + two inner flame cones),
+// scaled by fireFlicker for a flame-like animation, lighting the arena via
+// the accompanying TresPointLight.
+const fireOuterGeometry = new THREE.ConeGeometry(0.16, 0.34, 6);
+const fireInnerGeometry = new THREE.ConeGeometry(0.1, 0.24, 6);
+const fireOuterMaterial = new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff4400', emissiveIntensity: 1.1, roughness: 0.3 });
+const fireInnerMaterial = new THREE.MeshStandardMaterial({ color: '#ffb03d', emissive: '#ff8400', emissiveIntensity: 1.2, roughness: 0.3 });
+const fireCoreMaterial = new THREE.MeshStandardMaterial({ color: '#ffe23d', emissive: '#ffc400', emissiveIntensity: 1.5, roughness: 0.3 });
 
 const tileColors: Record<TileKind, string> = {
   EMPTY: '#333a48',

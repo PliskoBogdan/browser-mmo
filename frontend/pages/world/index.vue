@@ -131,8 +131,23 @@ onMounted(async () => {
   }
 
   await worldStore.fetchWorld();
+  // Coming back to this page (e.g. from Character) with the character
+  // already standing on a location/rift cell should offer to enter it right
+  // away — not require stepping off and back on to re-trigger the prompt.
+  checkArrivalAtCurrentPosition();
   ticker = setInterval(() => (now.value = Date.now()), 30_000);
 });
+
+function checkArrivalAtCurrentPosition() {
+  if (!overworld.value) return;
+  const location = overworld.value.locations.find((l) => l.mapX === position.value.x && l.mapY === position.value.y);
+  if (location) {
+    arrivedLocation.value = location;
+    return;
+  }
+  const rift = overworld.value.rifts.find((r) => r.mapX === position.value.x && r.mapY === position.value.y);
+  if (rift) arrivedRift.value = rift;
+}
 
 onUnmounted(() => {
   if (ticker) clearInterval(ticker);

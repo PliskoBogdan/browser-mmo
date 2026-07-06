@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RiftRunStatus, RiftTileKind } from '../../prisma/generated/client/enums';
 import { generateRift } from './rift-generator';
-import { ACTIVE_RIFT_LIFETIME_MS, RIFT_KEY_ITEM_NAME, RIFT_TIERS, TORCH_ITEM_NAME, type RiftTierConfig } from './rift.config';
-import { WORLD_WIDTH, WORLD_HEIGHT } from '../location/world.config';
+import { RIFT_KEY_ITEM_NAME, RIFT_TIERS, TORCH_ITEM_NAME, type RiftTierConfig } from './rift.config';
+import { GAME_CONFIG } from '../config/game.config';
 
 // Owns the rift's lifecycle on the overworld map: rotating expired rifts out,
 // creating fresh ones, and placing them on a free map cell. Deliberately has
@@ -62,7 +62,7 @@ export class RiftWorldService {
         entranceY: generated.entranceY,
         mapX: cell.x,
         mapY: cell.y,
-        expiresAt: new Date(Date.now() + ACTIVE_RIFT_LIFETIME_MS),
+        expiresAt: new Date(Date.now() + GAME_CONFIG.rift.lifetimeMs),
         tiles: {
           create: generated.tiles.map((t) => ({
             x: t.x,
@@ -93,8 +93,8 @@ export class RiftWorldService {
     const occupied = new Set([...locations, ...rifts].map((p) => `${p.mapX},${p.mapY}`));
 
     const free: { x: number; y: number }[] = [];
-    for (let y = 0; y < WORLD_HEIGHT; y++) {
-      for (let x = 0; x < WORLD_WIDTH; x++) {
+    for (let y = 0; y < GAME_CONFIG.world.height; y++) {
+      for (let x = 0; x < GAME_CONFIG.world.width; x++) {
         if (!occupied.has(`${x},${y}`)) free.push({ x, y });
       }
     }

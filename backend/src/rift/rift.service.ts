@@ -4,11 +4,12 @@ import { BattleService } from '../battle/battle.service';
 import { BattleStatus, RiftRunStatus, RiftTileKind } from '../../prisma/generated/client/enums';
 import { Prisma } from '../../prisma/generated/client/client';
 import type { RiftExtractResult, RiftGatherResult, RiftLootEntry, RiftMoveResult, RiftTileView, RiftView } from '@my/shared';
-import { EXPLORE_EXP_BASE, RESOURCE_RESPAWN_MS, RIFT_KEY_ITEM_NAME, TORCH_ITEM_NAME } from './rift.config';
+import { RIFT_KEY_ITEM_NAME, TORCH_ITEM_NAME } from './rift.config';
 import { calculateLevelUp } from '../character/leveling';
-import { STAT_POINTS_PER_LEVEL } from '../character/character-stats.service';
 import { perkPointsForLevel } from '../character/perks.config';
 import { addRiftLoot, parseRiftLoot } from './rift-loot';
+import { grantItem } from '../inventory/inventory.util';
+import { GAME_CONFIG } from '../config/game.config';
 
 type TileWithRefs = Prisma.RiftTileGetPayload<{
   include: { requiredItem: true; monster: true; resourceItem: true };
@@ -123,7 +124,7 @@ export class RiftService {
         await tx.userExploredTile.create({ data: { userId, riftTileId: tile.id } });
 
         // Exploration exp, deeper tiles are worth more.
-        expGained = (EXPLORE_EXP_BASE + tile.depth) * run.rift.tier;
+        expGained = Math.round((GAME_CONFIG.rift.exploreExpBase + tile.depth) * run.rift.tier * GAME_CONFIG.rewards.expMultiplier);
         const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { level: true, exp: true } });
         const { level, remainingExp } = calculateLevelUp(user.level, user.exp + expGained);
         leveledUp = level > user.level;
@@ -132,7 +133,7 @@ export class RiftService {
           data: {
             exp: remainingExp,
             level,
-            statPoints: { increment: (level - user.level) * STAT_POINTS_PER_LEVEL },
+            statPoints: { increment: (level - user.level) * GAME_CONFIG.leveling.statPointsPerLevel },
             perkPoints: { increment: perkPointsForLevel(level) - perkPointsForLevel(user.level) },
           },
         });
@@ -199,7 +200,7 @@ export class RiftService {
     if (isResource && remaining <= 0) {
       await this.prisma.riftTile.update({
         where: { id: tile.id },
-        data: { respawnAt: new Date(Date.now() + RESOURCE_RESPAWN_MS) },
+        data: { respawnAt: new Date(Date.now() + GAME_CONFIG.rift.resourceRespawnMs) },
       });
     }
 
@@ -216,7 +217,7 @@ export class RiftService {
     // immediately, same as monster kill gold always has been.
     let goldGained = 0;
     if (isChest && tile.goldReward > 0) {
-      goldGained = tile.goldReward;
+      goldGained = Math.round(tile.goldReward * GAME_CONFIG.rewards.goldMultiplier);
       await this.prisma.user.update({ where: { id: userId }, data: { gold: { increment: goldGained } } });
     }
     await this.prisma.riftRun.update({ where: { id: run.id }, data: { loot: loot as unknown as Prisma.InputJsonValue } });
@@ -236,11 +237,7 @@ export class RiftService {
     const banked = parseRiftLoot(run.loot);
     await this.prisma.$transaction(async (tx) => {
       for (const entry of banked) {
-        await tx.inventoryItem.upsert({
-          where: { userId_itemId: { userId, itemId: entry.itemId } },
-          update: { quantity: { increment: entry.quantity } },
-          create: { userId, itemId: entry.itemId, quantity: entry.quantity },
-        });
+        await grantItem(tx, userId, entry.itemId, entry.quantity);
       }
       await tx.riftRun.update({ where: { id: run.id }, data: { status: RiftRunStatus.EXTRACTED } });
     });

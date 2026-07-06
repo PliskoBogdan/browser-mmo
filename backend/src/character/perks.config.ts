@@ -1,4 +1,5 @@
 import type { PerkDefinition } from '@my/shared';
+import { GAME_CONFIG } from '../config/game.config';
 
 // Perks are game content, so they live in code rather than the database. A
 // player's *unlocked* perks are stored in the UserPerk table by `code`. Adding
@@ -128,7 +129,7 @@ export const PERK_DEFINITIONS: PerkDefinition[] = [
 
 export const PERK_BY_CODE = new Map(PERK_DEFINITIONS.map((p) => [p.code, p]));
 
-// A perk point is granted every 3 levels.
+// A perk point is granted every GAME_CONFIG.leveling.levelsPerPerkPoint levels.
 export function perkPointsForLevel(level: number): number {
-  return Math.floor(level / 3);
+  return Math.floor(level / GAME_CONFIG.leveling.levelsPerPerkPoint);
 }

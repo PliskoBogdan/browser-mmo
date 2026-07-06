@@ -128,9 +128,9 @@
 
 <script setup lang="ts">
 import type { SubLocationCell } from '~/stores/world';
-import type { InventoryEntry, ItemRarity as LootRarity } from '~/stores/inventory';
+import type { InventoryEntry } from '~/stores/inventory';
 import type { ShopCatalogEntry, ShopConsumableEntry } from '~/stores/shop';
-import type { EquipmentSlot, ItemRarity } from '~/stores/character';
+import { rarityColor, slotIcon } from '~/utils/game';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -161,28 +161,6 @@ watch(
     else if (isLootShop.value) inventoryStore.fetchInventory();
   },
 );
-
-const rarityColors: Record<ItemRarity | LootRarity, string> = {
-  COMMON: '#9e9e9e',
-  UNCOMMON: '#4caf50',
-  RARE: '#ffab00',
-};
-
-function rarityColor(rarity: ItemRarity | LootRarity) {
-  return rarityColors[rarity];
-}
-
-const SLOT_ICONS: Record<EquipmentSlot, string> = {
-  WEAPON: 'mdi-sword',
-  HELMET: 'mdi-hard-hat',
-  BODY: 'mdi-tshirt-crew',
-  PANTS: 'mdi-human-handsdown',
-  GLOVES: 'mdi-hand-back-right',
-};
-
-function slotIcon(slot: EquipmentSlot) {
-  return SLOT_ICONS[slot];
-}
 
 async function handleBuy(entry: ShopCatalogEntry) {
   if (!props.subLocation) return;

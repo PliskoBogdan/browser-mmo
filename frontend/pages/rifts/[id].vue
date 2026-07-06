@@ -306,10 +306,6 @@ function showSnackbar(text: string) {
   snackbarText.value = text;
   snackbar.value = true;
 }
-
-function rarityColor(rarity: string) {
-  return { COMMON: '#9e9e9e', UNCOMMON: '#4caf50', RARE: '#ffab00' }[rarity] ?? '#9e9e9e';
-}
 </script>
 
 <style scoped>

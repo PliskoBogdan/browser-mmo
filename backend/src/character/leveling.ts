@@ -1,12 +1,18 @@
-// Shared leveling curve: the exp needed to finish level N is N * 100.
-// Used by both battle rewards and rift exploration exp.
-export const EXP_PER_LEVEL_MULTIPLIER = 100;
+import { GAME_CONFIG } from '../config/game.config';
+
+// Shared leveling curve, used by both battle rewards and rift exploration exp.
+// The multiplier is tuned in GAME_CONFIG.leveling.
+
+// Exp needed to finish the given level.
+export function expToNextLevel(level: number): number {
+  return level * GAME_CONFIG.leveling.expPerLevelMultiplier;
+}
 
 export function calculateLevelUp(currentLevel: number, totalExp: number): { level: number; remainingExp: number } {
   let level = currentLevel;
   let exp = totalExp;
-  while (exp >= level * EXP_PER_LEVEL_MULTIPLIER) {
-    exp -= level * EXP_PER_LEVEL_MULTIPLIER;
+  while (exp >= expToNextLevel(level)) {
+    exp -= expToNextLevel(level);
     level++;
   }
   return { level, remainingExp: exp };

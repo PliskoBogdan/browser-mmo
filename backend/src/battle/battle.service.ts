@@ -5,21 +5,18 @@ import { BattleStatus, RiftRunStatus, RiftTileKind } from '../../prisma/generate
 import { SubLocationKind } from '../../prisma/generated/client/enums';
 import { Prisma } from '../../prisma/generated/client/client';
 import { AttackResultDto, EnterBattleResultDto } from './dto/attack-result.dto';
-import { CharacterProfile, CharacterStatsService, STATS_INCLUDE, STAT_POINTS_PER_LEVEL } from '../character/character-stats.service';
-import { PERK_BY_CODE, perkPointsForLevel } from '../character/perks.config';
-import { calculateLevelUp } from '../character/leveling';
-import { BOSS_RESPAWN_MS, DEATH_LOOT_KEEP_RATIO, MONSTER_RESPAWN_MS, RIFT_BONUS_DROPS, RIFT_LOOT_CHANCE_CAP, RIFT_LOOT_CHANCE_PER_DEPTH } from '../rift/rift.config';
-import { addRiftLoot, applyDeathPenalty, parseRiftLoot } from '../rift/rift-loot';
+import { CharacterProfile, CharacterStatsService, STATS_INCLUDE } from '../character/character-stats.service';
+import { PERK_BY_CODE } from '../character/perks.config';
+import { BattleRewardsService } from './battle-rewards.service';
+import { addRiftLoot, parseRiftLoot } from '../rift/rift-loot';
+import { grantItem } from '../inventory/inventory.util';
+import { GAME_CONFIG } from '../config/game.config';
 import { CombatResolver, createInitialState } from './engine/engine';
 import { SKILL_BY_CODE } from './engine/skills.config';
 import { resolveAiProfile } from './engine/monster-ai.config';
 import { buildStateView } from './engine/views';
 import type { BattleRuntimeState, EngineContext } from './engine/types';
 import type { RiftLootEntry } from '@my/shared';
-
-// Guard against pathological loops if a player leaves a battle idle for a very
-// long time before their next attack.
-const MAX_MONSTER_TICKS = 1000;
 
 type MonsterRow = { name: string; maxHp: number; damage: number; defense: number; attackSpeed: number; aiProfile: string | null };
 
@@ -29,6 +26,7 @@ export class BattleService {
     private prisma: PrismaService,
     private locationService: LocationService,
     private stats: CharacterStatsService,
+    private rewards: BattleRewardsService,
   ) {}
 
   async enterSubLocation(userId: number, subLocationId: number): Promise<EnterBattleResultDto> {
@@ -155,7 +153,8 @@ export class BattleService {
     // --- Replay the monster ticks accumulated since the last action ---
     const monsterIntervalMs = Math.round((1 / monster.attackSpeed) * 1000);
     const rawTicks = Math.floor((now.getTime() - battle.lastMonsterAttackAt.getTime()) / monsterIntervalMs);
-    const ticks = Math.min(rawTicks, MAX_MONSTER_TICKS);
+    // Guard against pathological replay loops if a battle sat idle for ages.
+    const ticks = Math.min(rawTicks, GAME_CONFIG.combat.maxMonsterTicks);
 
     const resolver = new CombatResolver(ctx, state, user.hp, battle.monsterCurrentHp);
     resolver.resolveMonsterTicks(ticks);
@@ -191,31 +190,28 @@ export class BattleService {
 
     if (monsterDied && !playerDied) {
       if (battle.riftTile) {
-        const chanceBonus = battle.riftTile.depth * RIFT_LOOT_CHANCE_PER_DEPTH;
-        const tableDrops = this.rollLoot(monster.loot, chanceBonus);
+        const chanceBonus = battle.riftTile.depth * GAME_CONFIG.rift.lootChancePerDepth;
+        const tableDrops = this.rewards.rollLoot(monster.loot, chanceBonus);
         riftBagEntries = tableDrops.map((d) => {
           const source = monster.loot.find((l) => l.item.name === d.name)!;
           return { itemId: source.itemId, name: d.name, rarity: d.rarity, quantity: d.quantity };
         });
-        gateItemEntries = await this.rollRiftBonusDrops();
+        gateItemEntries = await this.rewards.rollRiftBonusDrops();
         lootDrops = [...riftBagEntries.map((e) => ({ name: e.name, quantity: e.quantity, rarity: e.rarity, banked: false })), ...gateItemEntries.map((e) => ({ name: e.name, quantity: e.quantity, rarity: e.rarity, banked: true }))];
       } else if (battle.subLocation) {
         newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
-        lootDrops = this.rollLoot(monster.loot);
+        lootDrops = this.rewards.rollLoot(monster.loot);
       }
     }
 
     await this.prisma.$transaction(async (tx) => {
       if (monsterDied) {
-        expGained = monster.expReward;
-        goldGained = monster.goldReward;
-
-        const newExp = user.exp + expGained;
-        const newGold = user.gold + goldGained;
-        const { level: newLevel, remainingExp } = calculateLevelUp(user.level, newExp);
-        leveledUp = newLevel > user.level;
-        statPointsGained = (newLevel - user.level) * STAT_POINTS_PER_LEVEL;
-        perkPointsGained = perkPointsForLevel(newLevel) - perkPointsForLevel(user.level);
+        const kill = this.rewards.computeKillRewards(user, monster);
+        expGained = kill.expGained;
+        goldGained = kill.goldGained;
+        leveledUp = kill.leveledUp;
+        statPointsGained = kill.statPointsGained;
+        perkPointsGained = kill.perkPointsGained;
 
         const finalHp = playerDied ? 0 : playerCurrentHp;
 
@@ -224,9 +220,9 @@ export class BattleService {
         await tx.user.update({
           where: { id: userId },
           data: {
-            exp: remainingExp,
-            gold: newGold,
-            level: newLevel,
+            exp: kill.remainingExp,
+            gold: user.gold + goldGained,
+            level: kill.newLevel,
             hp: finalHp,
             isDead: playerDied,
             statPoints: { increment: statPointsGained },
@@ -238,13 +234,13 @@ export class BattleService {
         if (battle.riftTile) {
           // Shared world: the defeated monster stays gone for everyone until
           // it respawns. Bosses come back much slower — they shouldn't feel farmable.
-          const respawnMs = battle.riftTile.kind === RiftTileKind.BOSS ? BOSS_RESPAWN_MS : MONSTER_RESPAWN_MS;
+          const respawnMs = battle.riftTile.kind === RiftTileKind.BOSS ? GAME_CONFIG.rift.bossRespawnMs : GAME_CONFIG.rift.monsterRespawnMs;
           await tx.riftTile.update({
             where: { id: battle.riftTile.id },
             data: { respawnAt: new Date(Date.now() + respawnMs) },
           });
           if (playerDied) {
-            lostLoot = await this.applyRiftDeath(tx, userId);
+            lostLoot = await this.rewards.applyRiftDeath(tx, userId);
           } else {
             if (riftBagEntries.length) {
               const run = await tx.riftRun.findFirst({ where: { userId, status: RiftRunStatus.ACTIVE } });
@@ -254,22 +250,14 @@ export class BattleService {
               }
             }
             for (const entry of gateItemEntries) {
-              await tx.inventoryItem.upsert({
-                where: { userId_itemId: { userId, itemId: entry.itemId } },
-                update: { quantity: { increment: entry.quantity } },
-                create: { userId, itemId: entry.itemId, quantity: entry.quantity },
-              });
+              await grantItem(tx, userId, entry.itemId, entry.quantity);
             }
           }
         } else {
           for (const drop of monster.loot) {
             const dropped = lootDrops.find((d) => d.name === drop.item.name);
             if (!dropped) continue;
-            await tx.inventoryItem.upsert({
-              where: { userId_itemId: { userId, itemId: drop.itemId } },
-              update: { quantity: { increment: dropped.quantity } },
-              create: { userId, itemId: drop.itemId, quantity: dropped.quantity },
-            });
+            await grantItem(tx, userId, drop.itemId, dropped.quantity);
           }
         }
 
@@ -277,7 +265,7 @@ export class BattleService {
       } else if (playerDied) {
         await tx.battle.delete({ where: { id: battle.id } });
         await tx.user.update({ where: { id: userId }, data: { hp: 0, isDead: true } });
-        if (battle.riftTile) lostLoot = await this.applyRiftDeath(tx, userId);
+        if (battle.riftTile) lostLoot = await this.rewards.applyRiftDeath(tx, userId);
       } else {
         await tx.battle.update({
           where: { id: battle.id },
@@ -335,7 +323,7 @@ export class BattleService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const fleePenalty = Math.floor(user.maxHp * 0.2);
+    const fleePenalty = Math.floor(user.maxHp * GAME_CONFIG.death.fleeHpPenaltyRatio);
     const newHp = Math.max(1, user.hp - fleePenalty);
 
     await this.prisma.$transaction(async (tx) => {
@@ -385,7 +373,7 @@ export class BattleService {
     const monsterIntervalMs = Math.round((1 / battle.monster.attackSpeed) * 1000);
     const pendingTicks = Math.floor((now.getTime() - battle.lastMonsterAttackAt.getTime()) / monsterIntervalMs);
     const defReduction = CharacterStatsService.damageReduction(profile.final.defense);
-    const pendingMonsterDamage = pendingTicks * Math.max(1, Math.round(battle.monster.damage * (1 - defReduction)));
+    const pendingMonsterDamage = pendingTicks * Math.max(1, Math.round(ctx.monster.damage * (1 - defReduction)));
 
     return {
       activeBattle: {
@@ -441,14 +429,20 @@ export class BattleService {
 
   // --- Helpers ---
 
+  // The global damage multipliers are applied here, when the engine context is
+  // built — the engine itself stays pure and multiplier-free.
   private buildEngineContext(profile: CharacterProfile, monster: MonsterRow, perks: { perkCode: string }[]): EngineContext {
     const playerTriggers = perks.flatMap(({ perkCode }) => PERK_BY_CODE.get(perkCode)?.triggers ?? []);
+    const combat = {
+      ...profile.combat,
+      attackDamage: Math.round(profile.combat.attackDamage * GAME_CONFIG.combat.playerDamageMultiplier),
+    };
     return {
-      player: { combat: profile.combat, defense: profile.final.defense },
+      player: { combat, defense: profile.final.defense },
       monster: {
         name: monster.name,
         maxHp: monster.maxHp,
-        damage: monster.damage,
+        damage: Math.round(monster.damage * GAME_CONFIG.combat.monsterDamageMultiplier),
         defense: monster.defense,
         attackSpeed: monster.attackSpeed,
       },
@@ -484,53 +478,5 @@ export class BattleService {
       if (roll <= 0) return entry;
     }
     return entries[entries.length - 1];
-  }
-
-  // Rift death: part of the staged rift bag is forfeited, the rest is banked
-  // to the inventory, and the run ends. Returns what was lost so the caller
-  // can show it on the death screen.
-  private async applyRiftDeath(tx: Prisma.TransactionClient, userId: number): Promise<RiftLootEntry[]> {
-    const run = await tx.riftRun.findFirst({ where: { userId, status: RiftRunStatus.ACTIVE } });
-    if (!run) return [];
-
-    const { kept, lost } = applyDeathPenalty(parseRiftLoot(run.loot), DEATH_LOOT_KEEP_RATIO);
-    for (const entry of kept) {
-      await tx.inventoryItem.upsert({
-        where: { userId_itemId: { userId, itemId: entry.itemId } },
-        update: { quantity: { increment: entry.quantity } },
-        create: { userId, itemId: entry.itemId, quantity: entry.quantity },
-      });
-    }
-    await tx.riftRun.update({
-      where: { id: run.id },
-      data: { status: RiftRunStatus.DEAD, loot: kept as unknown as Prisma.InputJsonValue },
-    });
-    return lost;
-  }
-
-  // Rift-only extra drops (torches, keys) rolled on top of the normal table.
-  private async rollRiftBonusDrops(): Promise<RiftLootEntry[]> {
-    const items = await this.prisma.item.findMany({ where: { name: { in: RIFT_BONUS_DROPS.map((d) => d.itemName) } } });
-    const byName = new Map(items.map((i) => [i.name, i]));
-
-    const drops: RiftLootEntry[] = [];
-    for (const def of RIFT_BONUS_DROPS) {
-      const item = byName.get(def.itemName);
-      if (!item || Math.random() * 100 >= def.chance) continue;
-      const quantity = def.minQuantity + Math.floor(Math.random() * (def.maxQuantity - def.minQuantity + 1));
-      drops.push({ itemId: item.id, name: item.name, rarity: item.rarity, quantity });
-    }
-    return drops;
-  }
-
-  private rollLoot(loot: { itemId: number; dropChance: number; minQuantity: number; maxQuantity: number; item: { name: string; rarity: string } }[], chanceBonus = 0): { name: string; quantity: number; rarity: string }[] {
-    const drops: { name: string; quantity: number; rarity: string }[] = [];
-    for (const entry of loot) {
-      const chance = Math.min(entry.dropChance + chanceBonus, RIFT_LOOT_CHANCE_CAP);
-      if (Math.random() * 100 >= chance) continue;
-      const quantity = entry.minQuantity + Math.floor(Math.random() * (entry.maxQuantity - entry.minQuantity + 1));
-      drops.push({ name: entry.item.name, quantity, rarity: entry.item.rarity });
-    }
-    return drops;
   }
 }

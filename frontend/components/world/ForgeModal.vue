@@ -101,7 +101,7 @@
 <script setup lang="ts">
 import type { SubLocationCell } from '~/stores/world';
 import type { CraftRecipeView, CraftResultView } from '~/stores/crafting';
-import type { EquipmentSlot, ItemRarity } from '~/stores/character';
+import { rarityColor, SLOT_ICONS } from '~/utils/game';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -125,24 +125,6 @@ watch(
     craftingStore.fetchRecipes(props.subLocation.id);
   },
 );
-
-const rarityColors: Record<ItemRarity, string> = {
-  COMMON: '#9e9e9e',
-  UNCOMMON: '#4caf50',
-  RARE: '#ffab00',
-};
-
-function rarityColor(rarity: ItemRarity) {
-  return rarityColors[rarity];
-}
-
-const SLOT_ICONS: Record<EquipmentSlot, string> = {
-  WEAPON: 'mdi-sword',
-  HELMET: 'mdi-hard-hat',
-  BODY: 'mdi-tshirt-crew',
-  PANTS: 'mdi-human-handsdown',
-  GLOVES: 'mdi-hand-back-right',
-};
 
 function resultIcon(result: CraftResultView) {
   if (result.kind === 'ITEM') return 'mdi-flask-outline';

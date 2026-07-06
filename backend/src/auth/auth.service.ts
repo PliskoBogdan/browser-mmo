@@ -4,9 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CharacterService } from '../character/character.service';
-
-const STARTING_WEAPON_NAME = 'Rusty Sword';
-const STARTING_ARMOR_NAMES = ['Leather Cap', 'Leather Jerkin', 'Leather Trousers', 'Worn Leather Gloves'];
+import { GAME_CONFIG } from '../config/game.config';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +27,7 @@ export class AuthService {
     // Grant and auto-equip starter gear (seeded items). The weapon is equipped
     // so the character can fight immediately; armor gives a small stat head start.
     const starterItems = await this.prisma.equipmentItem.findMany({
-      where: { name: { in: [STARTING_WEAPON_NAME, ...STARTING_ARMOR_NAMES] } },
+      where: { name: { in: [GAME_CONFIG.starterKit.weaponName, ...GAME_CONFIG.starterKit.armorNames] } },
     });
     if (starterItems.length > 0) {
       await this.prisma.userEquipment.createMany({

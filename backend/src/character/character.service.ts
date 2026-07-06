@@ -3,10 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BattleStatus } from '../../prisma/generated/client/enums';
 import type { CoreStat, EquipmentSlot, PerkView } from '@my/shared';
 import { CORE_STATS } from './stats.constants';
-import { CharacterStatsService, REGEN_INTERVAL_MS, STATS_INCLUDE } from './character-stats.service';
+import { CharacterStatsService, STATS_INCLUDE } from './character-stats.service';
 import { PERK_DEFINITIONS, PERK_BY_CODE } from './perks.config';
-
-const RESURRECT_HP_PERCENT = 0.5;
+import { expToNextLevel } from './leveling';
+import { GAME_CONFIG } from '../config/game.config';
 
 type LoadedUser = NonNullable<Awaited<ReturnType<CharacterService['loadUser']>>>;
 
@@ -80,7 +80,7 @@ export class CharacterService {
     if (!user.isDead) throw new BadRequestException('Your character is not dead.');
 
     const maxHp = this.stats.computeProfile(user).combat.maxHp;
-    const restoredHp = Math.max(1, Math.floor(maxHp * RESURRECT_HP_PERCENT));
+    const restoredHp = Math.max(1, Math.floor(maxHp * GAME_CONFIG.death.resurrectHpRatio));
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -130,7 +130,7 @@ export class CharacterService {
 
     const now = Date.now();
     const elapsed = now - user.hpUpdatedAt.getTime();
-    const cycles = Math.floor(elapsed / REGEN_INTERVAL_MS);
+    const cycles = Math.floor(elapsed / GAME_CONFIG.combat.regenIntervalMs);
     if (cycles <= 0) {
       if (user.maxHp !== maxHp) {
         await this.prisma.user.update({ where: { id: user.id }, data: { maxHp } });
@@ -141,7 +141,7 @@ export class CharacterService {
 
     const regen = Math.floor(cycles * combat.healthRegenPerCycle);
     const newHp = Math.min(maxHp, user.hp + regen);
-    const newAnchor = new Date(user.hpUpdatedAt.getTime() + cycles * REGEN_INTERVAL_MS);
+    const newAnchor = new Date(user.hpUpdatedAt.getTime() + cycles * GAME_CONFIG.combat.regenIntervalMs);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -166,7 +166,7 @@ export class CharacterService {
       email: user.email,
       level: user.level,
       exp: user.exp,
-      expToNextLevel: user.level * 100,
+      expToNextLevel: expToNextLevel(user.level),
       gold: user.gold,
       hp: user.hp,
       maxHp: profile.combat.maxHp,

@@ -298,9 +298,6 @@ function fmt(stat: CoreStat, value: number) {
 function signed(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
-function rarityColor(rarity: 'COMMON' | 'UNCOMMON' | 'RARE') {
-  return { COMMON: '#9e9e9e', UNCOMMON: '#4caf50', RARE: '#ffab00' }[rarity];
-}
 function equippedStyle(slot: EquipmentSlot) {
   const item = character.value?.equipment[slot];
   return item ? { borderColor: rarityColor(item.rarity) } : {};

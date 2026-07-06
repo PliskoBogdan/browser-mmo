@@ -1,18 +1,8 @@
-// Tunables for rift generation, rewards and shared-world respawns.
+// Rift *content* definitions: tier layouts, name pools, gate items and bonus
+// drop tables. Scalar tunables (lifetime, respawns, loot chances, exploration
+// exp, death penalty) live in GAME_CONFIG.rift / GAME_CONFIG.death.
 // Item/monster references are by name and resolved against the DB when a rift
 // is created (see RiftService.createRift) — keep these in sync with seed.ts.
-
-export const ACTIVE_RIFT_LIFETIME_MS = 2 * 60 * 60 * 1000; // rift rotates out after 2h
-export const MONSTER_RESPAWN_MS = 3 * 60 * 1000;
-export const RESOURCE_RESPAWN_MS = 5 * 60 * 1000;
-// Bosses shouldn't feel farmable — much longer than a regular monster.
-export const BOSS_RESPAWN_MS = 20 * 60 * 1000;
-
-// Extraction risk: on death you keep ceil(quantity * KEEP) of each staged stack.
-export const DEATH_LOOT_KEEP_RATIO = 0.5;
-
-// Exploration exp per newly revealed tile: (base + depth) * tier.
-export const EXPLORE_EXP_BASE = 2;
 
 // Gate items (consumed per player when stepping onto the gate tile).
 export const TORCH_ITEM_NAME = 'Torch';
@@ -24,10 +14,6 @@ export const RIFT_BONUS_DROPS: { itemName: string; chance: number; minQuantity: 
   { itemName: TORCH_ITEM_NAME, chance: 30, minQuantity: 1, maxQuantity: 1 },
   { itemName: RIFT_KEY_ITEM_NAME, chance: 15, minQuantity: 1, maxQuantity: 1 },
 ];
-
-// Deeper rooms drop fatter loot: flat % added to every dropChance per depth step.
-export const RIFT_LOOT_CHANCE_PER_DEPTH = 3;
-export const RIFT_LOOT_CHANCE_CAP = 95;
 
 export interface RiftTierConfig {
   tier: number;

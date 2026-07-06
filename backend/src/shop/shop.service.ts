@@ -1,21 +1,15 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CharacterService } from '../character/character.service';
 import type { CoreStat, EquipmentSlot } from '@my/shared';
 import { CORE_STATS } from '../character/stats.constants';
+import { assertStandingAt } from '../location/sub-location-presence';
+import { grantItem } from '../inventory/inventory.util';
 
-interface UserPosition {
-  currentLocationId: number | null;
-  posX: number;
-  posY: number;
-}
-
-interface ShopSubLocation {
-  kind: string;
-  locationId: number;
-  gridX: number;
-  gridY: number;
-}
+// Weapon/armor shops are a separate physical tile from loot buyers by design
+// (see LOOT_SHOP) — the player must be standing on this shop's tile to browse
+// or buy.
+const SHOP_PRESENCE = { wrongKind: 'This location has no shop.', notPresent: 'You must be at this shop to do that.' };
 
 @Injectable()
 export class ShopService {
@@ -34,7 +28,7 @@ export class ShopService {
     ]);
     if (!user) throw new NotFoundException('User not found');
     if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
-    this.assertAtShop(user, subLocation);
+    assertStandingAt(user, subLocation, 'SHOP', SHOP_PRESENCE);
 
     const equipment = subLocation.shopListings.map(({ equipmentItem: item }) => {
       const modifiers: Partial<Record<CoreStat, number>> = {};
@@ -73,7 +67,7 @@ export class ShopService {
     const [user, subLocation] = await Promise.all([this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, currentLocationId: true, posX: true, posY: true } }), this.prisma.subLocation.findUnique({ where: { id: subLocationId } })]);
     if (!user) throw new NotFoundException('User not found');
     if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
-    this.assertAtShop(user, subLocation);
+    assertStandingAt(user, subLocation, 'SHOP', SHOP_PRESENCE);
 
     const listing = await this.prisma.shopListing.findUnique({
       where: { subLocationId_equipmentItemId: { subLocationId, equipmentItemId } },
@@ -91,7 +85,7 @@ export class ShopService {
     const [user, subLocation] = await Promise.all([this.prisma.user.findUnique({ where: { id: userId }, select: { gold: true, currentLocationId: true, posX: true, posY: true } }), this.prisma.subLocation.findUnique({ where: { id: subLocationId } })]);
     if (!user) throw new NotFoundException('User not found');
     if (!subLocation) throw new NotFoundException(`SubLocation #${subLocationId} not found`);
-    this.assertAtShop(user, subLocation);
+    assertStandingAt(user, subLocation, 'SHOP', SHOP_PRESENCE);
 
     const listing = await this.prisma.shopItemListing.findUnique({
       where: { subLocationId_itemId: { subLocationId, itemId } },
@@ -100,25 +94,8 @@ export class ShopService {
     if (!listing || listing.item.buyPrice === null) throw new NotFoundException('That item is not sold here.');
     if (user.gold < listing.item.buyPrice) throw new BadRequestException('Not enough gold.');
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { gold: { decrement: listing.item.buyPrice } } }),
-      this.prisma.inventoryItem.upsert({
-        where: { userId_itemId: { userId, itemId } },
-        update: { quantity: { increment: 1 } },
-        create: { userId, itemId, quantity: 1 },
-      }),
-    ]);
+    await this.prisma.$transaction([this.prisma.user.update({ where: { id: userId }, data: { gold: { decrement: listing.item.buyPrice } } }), grantItem(this.prisma, userId, itemId, 1)]);
 
     return { message: `Bought 1x ${listing.item.name}.` };
-  }
-
-  // Weapon/armor shops are a separate physical tile from loot buyers by
-  // design (see LOOT_SHOP) — the player must actually be standing on this
-  // shop's tile to browse or buy, not just know its id.
-  private assertAtShop(user: UserPosition, subLocation: ShopSubLocation) {
-    if (subLocation.kind !== 'SHOP') throw new BadRequestException('This location has no shop.');
-    if (user.currentLocationId !== subLocation.locationId || user.posX !== subLocation.gridX || user.posY !== subLocation.gridY) {
-      throw new ForbiddenException('You must be at this shop to do that.');
-    }
   }
 }

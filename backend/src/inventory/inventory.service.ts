@@ -1,5 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertStandingAt } from '../location/sub-location-presence';
+
+// Loot buyers (LOOT_SHOP) are a separate physical tile from weapon shops by
+// design — the player must be standing at one to sell loot for gold.
+const LOOT_SHOP_PRESENCE = { wrongKind: 'You must be at a loot buyer to sell.', notPresent: 'You must be at a loot buyer to sell.' };
 
 @Injectable()
 export class InventoryService {
@@ -43,15 +48,14 @@ export class InventoryService {
     return { message: `Sold ${quantity}x ${entry.item.name} for ${goldGained} gold.`, goldGained, remainingQuantity: Math.max(0, remaining) };
   }
 
-  // Loot buyers (LOOT_SHOP) are a separate physical tile from weapon shops by
-  // design — the player must be standing at one to sell loot for gold.
   private async assertAtLootShop(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { currentLocationId: true, posX: true, posY: true } });
-    if (!user || user.currentLocationId === null) throw new ForbiddenException('You must be at a loot buyer to sell.');
+    if (!user || user.currentLocationId === null) throw new ForbiddenException(LOOT_SHOP_PRESENCE.notPresent);
 
     const subLocation = await this.prisma.subLocation.findUnique({
       where: { locationId_gridX_gridY: { locationId: user.currentLocationId, gridX: user.posX, gridY: user.posY } },
     });
-    if (!subLocation || subLocation.kind !== 'LOOT_SHOP') throw new ForbiddenException('You must be at a loot buyer to sell.');
+    if (!subLocation) throw new ForbiddenException(LOOT_SHOP_PRESENCE.notPresent);
+    assertStandingAt(user, subLocation, 'LOOT_SHOP', LOOT_SHOP_PRESENCE);
   }
 }

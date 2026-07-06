@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { BattleStatus, RiftRunStatus, SubLocationKind } from '../../prisma/generated/client/enums';
 import { RiftWorldService } from '../rift/rift-world.service';
-import { WORLD_WIDTH, WORLD_HEIGHT } from './world.config';
+import { GAME_CONFIG } from '../config/game.config';
 
 @Injectable()
 export class LocationService {
@@ -78,8 +78,8 @@ export class LocationService {
     ]);
 
     return {
-      width: WORLD_WIDTH,
-      height: WORLD_HEIGHT,
+      width: GAME_CONFIG.world.width,
+      height: GAME_CONFIG.world.height,
       locations: locations.map((l) => ({ ...l, locked: user.level < l.minLevel })),
       rifts: rifts.map((r) => ({ ...r, expiresAt: r.expiresAt.toISOString(), locked: user.level < r.minLevel })),
     };
@@ -93,7 +93,7 @@ export class LocationService {
     }
     await this.assertNoActiveBattle(userId);
     await this.assertNoActiveRiftRun(userId);
-    this.assertInBounds(x, y, WORLD_WIDTH, WORLD_HEIGHT);
+    this.assertInBounds(x, y, GAME_CONFIG.world.width, GAME_CONFIG.world.height);
     this.assertAdjacent(user.posX, user.posY, x, y);
 
     await this.prisma.user.update({ where: { id: userId }, data: { posX: x, posY: y } });

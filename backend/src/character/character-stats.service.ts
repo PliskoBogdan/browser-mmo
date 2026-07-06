@@ -4,20 +4,9 @@ import type { CombatProfile, CoreStat, StatBlock, StatBreakdownBlock } from '@my
 import { CORE_STATS } from './stats.constants';
 import { damageReduction } from './stats.formulas';
 import { PERK_BY_CODE } from './perks.config';
+import { GAME_CONFIG } from '../config/game.config';
 
-// --- Tunable game constants (single source of truth per the spec) ---
-export const BASE_MAX_HP = 100;
-export const STAT_POINTS_PER_LEVEL = 3;
-
-const STRENGTH_HP_MULT = 10;
-const STRENGTH_REGEN_MULT = 0.2;
-const STRENGTH_DAMAGE_MULT = 0.5;
-
-const MAX_EVASION = 0.6;
-const MAX_CRIT_CHANCE = 0.75;
-
-// How often (ms) one health-regeneration cycle elapses for lazy regen.
-export const REGEN_INTERVAL_MS = 10_000;
+// All formula tunables live in GAME_CONFIG.combat — retune the game there.
 
 // The default stats a brand-new character starts with.
 export const DEFAULT_CHARACTER_STATS: StatBlock = {
@@ -116,21 +105,22 @@ export class CharacterStatsService {
   }
 
   private deriveCombat(final: StatBlock, weapon: EquipmentItemStats | null, regenBonus: number): CombatProfile {
+    const cfg = GAME_CONFIG.combat;
     const strength = Math.max(0, final.strength);
     const agility = Math.max(0, final.agility);
     const accuracy = Math.max(0, final.accuracy);
 
-    const maxHp = BASE_MAX_HP + strength * STRENGTH_HP_MULT;
-    const healthRegenPerCycle = strength * STRENGTH_REGEN_MULT * (1 + regenBonus);
+    const maxHp = cfg.baseMaxHp + strength * cfg.strengthHpMult;
+    const healthRegenPerCycle = strength * cfg.strengthRegenMult * (1 + regenBonus);
 
     const attackSpeed = weapon?.attackSpeed ?? null;
-    const attackDamage = weapon ? weapon.baseDamage + Math.floor(strength * STRENGTH_DAMAGE_MULT) : 0;
+    const attackDamage = weapon ? weapon.baseDamage + Math.floor(strength * cfg.strengthDamageMult) : 0;
 
     return {
       maxHp,
       healthRegenPerCycle,
-      evasionChance: Math.min(MAX_EVASION, agility / (agility + 100)),
-      critChance: Math.min(MAX_CRIT_CHANCE, accuracy / (accuracy + 100)),
+      evasionChance: Math.min(cfg.maxEvasion, agility / (agility + 100)),
+      critChance: Math.min(cfg.maxCritChance, accuracy / (accuracy + 100)),
       critMultiplier: Math.max(1, final.criticalDamage / 100),
       attackDamage,
       attackSpeed,

@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import type { EquipmentSlot, ItemRarity } from '~/stores/character';
+import { rarityColor, SLOT_ICONS } from '~/utils/game';
 
 const characterStore = useCharacterStore();
 const inventoryStore = useInventoryStore();
@@ -102,20 +102,8 @@ const { character } = storeToRefs(characterStore);
 
 const busy = ref(false);
 
-const SLOT_ICONS: Record<EquipmentSlot, string> = {
-  WEAPON: 'mdi-sword',
-  HELMET: 'mdi-hard-hat',
-  BODY: 'mdi-tshirt-crew',
-  PANTS: 'mdi-human-handsdown',
-  GLOVES: 'mdi-hand-back-right',
-};
-
 const unequippedGear = computed(() => characterStore.gear.filter((g) => !g.equipped));
 const totalCount = computed(() => unequippedGear.value.length + inventoryStore.items.length);
-
-function rarityColor(rarity: ItemRarity) {
-  return { COMMON: '#9e9e9e', UNCOMMON: '#4caf50', RARE: '#ffab00' }[rarity];
-}
 
 function refresh() {
   characterStore.fetchGear();

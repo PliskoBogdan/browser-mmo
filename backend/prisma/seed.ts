@@ -50,6 +50,18 @@ async function main() {
     // --- Rarer armor to chase ---
     { name: 'Steel Helm', slot: 'HELMET', rarity: 'UNCOMMON', description: 'Heavy plating for the head.', defense: 12, endurance: 3, agility: -2, sellValue: 40, price: 90, minLevel: 5 },
     { name: 'Plate Armor', slot: 'BODY', rarity: 'RARE', description: 'Full plate, forged for knights.', defense: 25, strength: 8, agility: -3, sellValue: 90, price: 250, minLevel: 10 },
+
+    // --- Craft-only gear (price 0, never listed in any shop — see forge
+    // recipes below). Each piece is a sidegrade/upgrade you earn by hunting
+    // the specific materials out in the world, not by saving gold.
+    { name: 'Scrapiron Blade', slot: 'WEAPON', rarity: 'UNCOMMON', description: 'Hammered together from salvage. Uglier than any shop blade — and meaner.', baseDamage: 26, attackSpeed: 1.2, strength: 3, sellValue: 20, price: 0, minLevel: 3, icon: 'mdi-sword' },
+    { name: 'Wolfhide Vest', slot: 'BODY', rarity: 'UNCOMMON', description: 'Layered wolf pelts, supple where plate would bind.', defense: 14, agility: 3, endurance: 2, sellValue: 35, price: 0, minLevel: 6 },
+    { name: 'Ironbound Gauntlets', slot: 'GLOVES', rarity: 'UNCOMMON', description: 'Leather gloves ribbed with cold-hammered ore.', defense: 6, strength: 4, accuracy: 2, sellValue: 30, price: 0, minLevel: 7 },
+    { name: 'Ghoulhide Leggings', slot: 'PANTS', rarity: 'RARE', description: 'Cured in ghoul ichor. Smells faintly wrong, moves exactly right.', agility: 6, defense: 8, endurance: 3, sellValue: 55, price: 0, minLevel: 9 },
+    { name: 'Riftglass Longsword', slot: 'WEAPON', rarity: 'RARE', description: 'A blade edged with crystallized rift energy. It hums when drawn.', baseDamage: 44, attackSpeed: 1.4, accuracy: 5, criticalDamage: 10, sellValue: 85, price: 0, minLevel: 8, icon: 'mdi-sword' },
+    { name: 'Fangblade of the Alpha', slot: 'WEAPON', rarity: 'RARE', description: "Forged around the Alpha's fang. It still wants to hunt.", baseDamage: 58, attackSpeed: 1.5, agility: 6, criticalDamage: 25, sellValue: 140, price: 0, minLevel: 10, icon: 'mdi-sword-cross' },
+    { name: "Warlord's Warhelm", slot: 'HELMET', rarity: 'RARE', description: "The Warlord's emblem, reforged into a helm that remembers every battle.", defense: 16, strength: 5, endurance: 4, sellValue: 120, price: 0, minLevel: 11 },
+    { name: 'Totemic Bulwark', slot: 'BODY', rarity: 'RARE', description: "Plate armor bound around the Chieftain's totem. Dark magic holds the seams.", defense: 30, endurance: 8, strength: 6, agility: -2, sellValue: 200, price: 0, minLevel: 12 },
   ];
 
   for (const e of equipment) {
@@ -502,6 +514,43 @@ async function main() {
   };
   const moorPawnbroker = await prisma.subLocation.upsert({ where: { id: 14 }, update: moorPawnbrokerData, create: moorPawnbrokerData });
 
+  // --- Forges (crafting stations) — one per location, tiered like the shops.
+  const hamletForgeData = {
+    id: 15,
+    locationId: ruinedHamlet.id,
+    name: 'Hamlet Forge',
+    description: 'A soot-stained smithy. The old smith works salvage into serviceable steel.',
+    kind: 'FORGE' as const,
+    minLevel: 1,
+    gridX: 0,
+    gridY: 0,
+  };
+  const hamletForge = await prisma.subLocation.upsert({ where: { id: 15 }, update: hamletForgeData, create: hamletForgeData });
+
+  const woodlandForgeData = {
+    id: 16,
+    locationId: darkForest.id,
+    name: 'Woodland Forge',
+    description: 'A charcoal-burner turned smith, working pelts and ore by firelight.',
+    kind: 'FORGE' as const,
+    minLevel: 5,
+    gridX: 0,
+    gridY: 0,
+  };
+  const woodlandForge = await prisma.subLocation.upsert({ where: { id: 16 }, update: woodlandForgeData, create: woodlandForgeData });
+
+  const moorlandForgeData = {
+    id: 17,
+    locationId: cursedMoor.id,
+    name: 'Moorland Forge',
+    description: 'A ruined chapel repurposed as a forge. The smith asks no questions about trophies.',
+    kind: 'FORGE' as const,
+    minLevel: 10,
+    gridX: 0,
+    gridY: 0,
+  };
+  const moorlandForge = await prisma.subLocation.upsert({ where: { id: 17 }, update: moorlandForgeData, create: moorlandForgeData });
+
   console.log(
     `Sub-locations seeded: ${[
       hamletGate,
@@ -518,6 +567,9 @@ async function main() {
       moorTradingPost,
       blightedMarsh,
       moorPawnbroker,
+      hamletForge,
+      woodlandForge,
+      moorlandForge,
     ]
       .map((s) => s.name)
       .join(', ')}`,
@@ -574,6 +626,178 @@ async function main() {
   });
 
   console.log('Shop item listings seeded.');
+
+  // --- Crafting recipes ---
+  // Craft-only gear (price 0, no shop listing) plus a consumable bundle.
+  // Ingredient names reference monster loot and rift resources seeded above,
+  // result names reference the craft-only equipment block — both resolved by
+  // name so reseeds stay stable.
+  const recipes: {
+    name: string;
+    description: string;
+    goldCost: number;
+    minLevel: number;
+    forgeId: number;
+    resultEquipmentName?: string;
+    resultItemName?: string;
+    resultQuantity?: number;
+    ingredients: { itemName: string; quantity: number }[];
+  }[] = [
+    // Hamlet Forge (Lv1): entry recipes from hamlet loot + rift herbs.
+    {
+      name: 'Bundle of Torches',
+      description: 'Emberleaf burns slow and bright — three torches from one pressing.',
+      goldCost: 5,
+      minLevel: 1,
+      forgeId: hamletForge.id,
+      resultItemName: 'Torch',
+      resultQuantity: 3,
+      ingredients: [
+        { itemName: 'Emberleaf Herb', quantity: 2 },
+        { itemName: 'Torn Cloth', quantity: 1 },
+      ],
+    },
+    {
+      name: 'Scrapiron Blade',
+      description: 'Every hound and ghoul in the hamlet carries a piece of this sword.',
+      goldCost: 25,
+      minLevel: 3,
+      forgeId: hamletForge.id,
+      resultEquipmentName: 'Scrapiron Blade',
+      ingredients: [
+        { itemName: 'Rusty Iron Scraps', quantity: 8 },
+        { itemName: 'Torn Cloth', quantity: 2 },
+      ],
+    },
+    // Woodland Forge (Lv5): pelts + rift ore.
+    {
+      name: 'Wolfhide Vest',
+      description: 'Four pelts, cut and layered against the cold and worse.',
+      goldCost: 60,
+      minLevel: 6,
+      forgeId: woodlandForge.id,
+      resultEquipmentName: 'Wolfhide Vest',
+      ingredients: [
+        { itemName: 'Wolf Pelt', quantity: 4 },
+        { itemName: 'Torn Cloth', quantity: 3 },
+      ],
+    },
+    {
+      name: 'Ironbound Gauntlets',
+      description: 'Rift ore hammered flat over wolf leather.',
+      goldCost: 80,
+      minLevel: 7,
+      forgeId: woodlandForge.id,
+      resultEquipmentName: 'Ironbound Gauntlets',
+      ingredients: [
+        { itemName: 'Iron Ore Chunk', quantity: 4 },
+        { itemName: 'Wolf Pelt', quantity: 2 },
+      ],
+    },
+    {
+      name: 'Riftglass Longsword',
+      description: 'Riftglass holds an edge no whetstone can give.',
+      goldCost: 150,
+      minLevel: 8,
+      forgeId: woodlandForge.id,
+      resultEquipmentName: 'Riftglass Longsword',
+      ingredients: [
+        { itemName: 'Riftglass Shard', quantity: 3 },
+        { itemName: 'Iron Ore Chunk', quantity: 5 },
+      ],
+    },
+    // Moorland Forge (Lv10): boss trophies become endgame gear.
+    {
+      name: 'Ghoulhide Leggings',
+      description: 'Ichor-cured hide, tanned the way only a moor smith knows.',
+      goldCost: 120,
+      minLevel: 9,
+      forgeId: moorlandForge.id,
+      resultEquipmentName: 'Ghoulhide Leggings',
+      ingredients: [
+        { itemName: 'Ghoul Ichor', quantity: 4 },
+        { itemName: 'Wolf Pelt', quantity: 3 },
+      ],
+    },
+    {
+      name: 'Fangblade of the Alpha',
+      description: "Bring the Alpha's fang and enough steel to build a blade around it.",
+      goldCost: 250,
+      minLevel: 10,
+      forgeId: moorlandForge.id,
+      resultEquipmentName: 'Fangblade of the Alpha',
+      ingredients: [
+        { itemName: "Alpha's Fang", quantity: 1 },
+        { itemName: 'Riftglass Shard', quantity: 2 },
+        { itemName: 'Iron Ore Chunk', quantity: 4 },
+      ],
+    },
+    {
+      name: "Warlord's Warhelm",
+      description: "The Warlord's emblem, beaten into a helm over a bed of pelts.",
+      goldCost: 300,
+      minLevel: 11,
+      forgeId: moorlandForge.id,
+      resultEquipmentName: "Warlord's Warhelm",
+      ingredients: [
+        { itemName: "Warlord's Emblem", quantity: 1 },
+        { itemName: 'Wolf Pelt', quantity: 4 },
+        { itemName: 'Iron Ore Chunk', quantity: 3 },
+      ],
+    },
+    {
+      name: 'Totemic Bulwark',
+      description: "The Chieftain's totem, sealed inside plate with troll fat and a relic's power.",
+      goldCost: 500,
+      minLevel: 12,
+      forgeId: moorlandForge.id,
+      resultEquipmentName: 'Totemic Bulwark',
+      ingredients: [
+        { itemName: "Chieftain's Totem", quantity: 1 },
+        { itemName: 'Troll Fat', quantity: 3 },
+        { itemName: 'Ancient Relic', quantity: 1 },
+      ],
+    },
+  ];
+
+  const equipmentByNameForCraft = new Map((await prisma.equipmentItem.findMany()).map((e) => [e.name, e]));
+  const itemByName = new Map((await prisma.item.findMany()).map((i) => [i.name, i]));
+
+  for (const r of recipes) {
+    const resultEquipment = r.resultEquipmentName ? equipmentByNameForCraft.get(r.resultEquipmentName) : undefined;
+    if (r.resultEquipmentName && !resultEquipment) throw new Error(`Unknown equipment in recipe result: ${r.resultEquipmentName}`);
+    const resultItem = r.resultItemName ? itemByName.get(r.resultItemName) : undefined;
+    if (r.resultItemName && !resultItem) throw new Error(`Unknown item in recipe result: ${r.resultItemName}`);
+
+    const recipeData = {
+      name: r.name,
+      description: r.description,
+      goldCost: r.goldCost,
+      minLevel: r.minLevel,
+      resultEquipmentId: resultEquipment?.id ?? null,
+      resultItemId: resultItem?.id ?? null,
+      resultQuantity: r.resultQuantity ?? 1,
+    };
+    const recipe = await prisma.craftingRecipe.upsert({ where: { name: r.name }, update: recipeData, create: recipeData });
+
+    // Replace the ingredient list wholesale so reseeds pick up balance changes.
+    await prisma.craftingIngredient.deleteMany({ where: { recipeId: recipe.id } });
+    await prisma.craftingIngredient.createMany({
+      data: r.ingredients.map((ing) => {
+        const item = itemByName.get(ing.itemName);
+        if (!item) throw new Error(`Unknown item in recipe ingredients: ${ing.itemName}`);
+        return { recipeId: recipe.id, itemId: item.id, quantity: ing.quantity };
+      }),
+    });
+
+    await prisma.forgeListing.upsert({
+      where: { subLocationId_recipeId: { subLocationId: r.forgeId, recipeId: recipe.id } },
+      update: {},
+      create: { subLocationId: r.forgeId, recipeId: recipe.id },
+    });
+  }
+
+  console.log(`Crafting recipes seeded: ${recipes.map((r) => r.name).join(', ')}`);
 
   // --- Monster Spawns ---
   // Outskirts: Feral Hounds (high weight) + Bandits (low weight)

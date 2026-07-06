@@ -1,4 +1,4 @@
-export type SubLocationKind = 'SAFE' | 'SHOP' | 'LOOT_SHOP' | 'DANGER';
+export type SubLocationKind = 'SAFE' | 'SHOP' | 'LOOT_SHOP' | 'FORGE' | 'DANGER';
 
 export interface WorldLocationNode {
   id: number;

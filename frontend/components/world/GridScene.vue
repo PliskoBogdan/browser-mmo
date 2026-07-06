@@ -101,6 +101,7 @@ export type TileKind =
   | 'SAFE'
   | 'SHOP'
   | 'LOOT_SHOP'
+  | 'FORGE'
   | 'DANGER'
   | 'LOCATION'
   | 'LOCATION_LOCKED'
@@ -355,6 +356,7 @@ const tileColors: Record<TileKind, string> = {
   SAFE: '#3fae5c',
   SHOP: '#d4af37',
   LOOT_SHOP: '#8e6bb0',
+  FORGE: '#c2571f',
   DANGER: '#b3403d',
   LOCATION: '#4fa8e0',
   LOCATION_LOCKED: '#565c68',
@@ -444,6 +446,9 @@ watch(
 }
 .tile-label.loot_shop {
   border-color: #8e6bb0;
+}
+.tile-label.forge {
+  border-color: #c2571f;
 }
 .tile-label.danger {
   border-color: #b3403d;

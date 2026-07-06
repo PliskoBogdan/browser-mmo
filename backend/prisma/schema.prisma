@@ -87,8 +87,9 @@ model EquipmentItem {
   baseDamage  Int   @default(0) // weapon contribution to attack damage
   attackSpeed Float? // weapon only; null for armor
 
-  owners       UserEquipment[]
-  shopListings ShopListing[]
+  owners        UserEquipment[]
+  shopListings  ShopListing[]
+  craftRecipes  CraftingRecipe[]
 }
 
 // Gear a player owns; `equipped` marks it as active in its slot. At most one
@@ -149,6 +150,7 @@ model SubLocation {
   battles          Battle[]
   shopListings     ShopListing[]
   shopItemListings ShopItemListing[]
+  forgeListings    ForgeListing[]
 
   @@unique([locationId, gridX, gridY])
 }
@@ -179,10 +181,58 @@ model ShopItemListing {
   @@unique([subLocationId, itemId])
 }
 
+// --- Crafting: forges turn world-gathered materials into gear/consumables ---
+
+// A recipe known to one or more FORGE sub-locations (via ForgeListing).
+// Exactly one of resultEquipmentId/resultItemId is set: a recipe forges either
+// a piece of gear (always 1) or a stack of consumables (resultQuantity).
+model CraftingRecipe {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+  goldCost    Int     @default(0)
+  minLevel    Int     @default(1)
+
+  resultEquipmentId Int?
+  resultEquipment   EquipmentItem? @relation(fields: [resultEquipmentId], references: [id])
+  resultItemId      Int?
+  resultItem        Item?          @relation("CraftResultItem", fields: [resultItemId], references: [id])
+  resultQuantity    Int            @default(1)
+
+  ingredients   CraftingIngredient[]
+  forgeListings ForgeListing[]
+}
+
+model CraftingIngredient {
+  recipeId Int
+  itemId   Int
+  quantity Int @default(1)
+
+  recipe CraftingRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  item   Item           @relation(fields: [itemId], references: [id])
+
+  @@id([recipeId, itemId])
+}
+
+// Which FORGE tile teaches a recipe — same catalog-assignment pattern as
+// ShopListing: tiered forges carry tiered recipes, so crafting the good stuff
+// means traveling to the deeper location's forge.
+model ForgeListing {
+  id            Int @id @default(autoincrement())
+  subLocationId Int
+  recipeId      Int
+
+  subLocation SubLocation    @relation(fields: [subLocationId], references: [id])
+  recipe      CraftingRecipe @relation(fields: [recipeId], references: [id])
+
+  @@unique([subLocationId, recipeId])
+}
+
 enum SubLocationKind {
   SAFE
   SHOP // sells weapons/armor (buy only)
   LOOT_SHOP // buys monster loot for gold (sell only) — deliberately a separate tile from SHOP
+  FORGE // crafting station: turns gathered materials into gear/consumables (see CraftingRecipe)
   DANGER
 }
 
@@ -217,11 +267,13 @@ model Item {
   // item is never purchasable — only ever found (e.g. Rusty Key, monster loot).
   buyPrice Int?
 
-  drops         MonsterLoot[]
-  inventory     InventoryItem[]
-  gatesOpened   RiftTile[]        @relation("RiftGateItem")
-  resourceTiles RiftTile[]        @relation("RiftResourceItem")
-  shopListings  ShopItemListing[]
+  drops            MonsterLoot[]
+  inventory        InventoryItem[]
+  gatesOpened      RiftTile[]           @relation("RiftGateItem")
+  resourceTiles    RiftTile[]           @relation("RiftResourceItem")
+  shopListings     ShopItemListing[]
+  craftResults     CraftingRecipe[]     @relation("CraftResultItem")
+  craftIngredients CraftingIngredient[]
 }
 
 enum ItemRarity {

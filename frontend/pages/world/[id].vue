@@ -37,6 +37,7 @@
     <v-snackbar v-model="snackbar" timeout="3200">{{ snackbarText }}</v-snackbar>
 
     <WorldShopModal v-model="shopOpen" :sub-location="shopSubLocation" />
+    <WorldForgeModal v-model="forgeOpen" :sub-location="forgeSubLocation" />
   </div>
 </template>
 
@@ -60,6 +61,8 @@ const snackbar = ref(false);
 const snackbarText = ref('');
 const shopOpen = ref(false);
 const shopSubLocation = ref<SubLocationCell | null>(null);
+const forgeOpen = ref(false);
+const forgeSubLocation = ref<SubLocationCell | null>(null);
 
 const tiles = computed<GridTile[]>(() => {
   if (!currentLocation.value) return [];
@@ -130,6 +133,9 @@ async function handleArrival(subLocation: SubLocationCell) {
   } else if (subLocation.kind === 'SHOP' || subLocation.kind === 'LOOT_SHOP') {
     shopSubLocation.value = subLocation;
     shopOpen.value = true;
+  } else if (subLocation.kind === 'FORGE') {
+    forgeSubLocation.value = subLocation;
+    forgeOpen.value = true;
   } else {
     showSnackbar(subLocation.description ?? `You arrive at ${subLocation.name}.`);
   }

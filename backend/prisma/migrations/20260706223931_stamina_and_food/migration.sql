@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Item" ADD COLUMN     "staminaRestore" INTEGER;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "stamina" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN     "staminaUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

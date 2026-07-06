@@ -231,7 +231,15 @@ async function main() {
     create: { name: 'Troll Fat', description: 'A pulsing lump of fat still warm to the touch. Valuable to the right buyer.', sellValue: 75, rarity: 'RARE' },
   });
 
-  console.log(`Items seeded: ${[ironScraps, bentNails, tornCloth, banditTrinket, wolfPelt, ghoulIchor, trollFat].map((i) => i.name).join(', ')}`);
+  // --- Food (staminaRestore != null → edible via POST /inventory/:id/use) ---
+  const wolfMeatData = { name: 'Wolf Meat', description: 'A raw cut of wolf. Edible in a pinch, better in a stew.', sellValue: 6, rarity: 'COMMON' as const, staminaRestore: 10 };
+  const wolfMeat = await prisma.item.upsert({ where: { name: 'Wolf Meat' }, update: wolfMeatData, create: wolfMeatData });
+  const trailRationsData = { name: 'Trail Rations', description: 'Hardtack and dried fruit. Keeps a traveler on their feet.', sellValue: 4, rarity: 'COMMON' as const, buyPrice: 12, staminaRestore: 25 };
+  const trailRations = await prisma.item.upsert({ where: { name: 'Trail Rations' }, update: trailRationsData, create: trailRationsData });
+  const travelersStewData = { name: "Traveler's Stew", description: 'Emberleaf and wolf meat, simmered thick. Warms you to the bones.', sellValue: 15, rarity: 'UNCOMMON' as const, staminaRestore: 60 };
+  const travelersStew = await prisma.item.upsert({ where: { name: "Traveler's Stew" }, update: travelersStewData, create: travelersStewData });
+
+  console.log(`Items seeded: ${[ironScraps, bentNails, tornCloth, banditTrinket, wolfPelt, ghoulIchor, trollFat, wolfMeat, trailRations, travelersStew].map((i) => i.name).join(', ')}`);
 
   // --- Rift items ---
   // Gate openers (consumed when stepping onto LOCKED/DARK rift tiles) — names
@@ -269,6 +277,7 @@ async function main() {
     { monsterId: bandit.id, itemId: tornCloth.id, dropChance: 60, minQuantity: 1, maxQuantity: 2 },
     { monsterId: bandit.id, itemId: banditTrinket.id, dropChance: 15, minQuantity: 1, maxQuantity: 1 },
     { monsterId: wolf.id, itemId: wolfPelt.id, dropChance: 50, minQuantity: 1, maxQuantity: 1 },
+    { monsterId: wolf.id, itemId: wolfMeat.id, dropChance: 60, minQuantity: 1, maxQuantity: 2 },
     { monsterId: ghoul.id, itemId: ghoulIchor.id, dropChance: 40, minQuantity: 1, maxQuantity: 1 },
     { monsterId: ghoul.id, itemId: bentNails.id, dropChance: 60, minQuantity: 1, maxQuantity: 3 },
     { monsterId: bogTroll.id, itemId: trollFat.id, dropChance: 35, minQuantity: 1, maxQuantity: 1 },
@@ -625,6 +634,15 @@ async function main() {
     create: { subLocationId: tradingPost.id, itemId: torch.id },
   });
 
+  // Trail Rations are travel fuel — every trading post stocks them.
+  for (const post of [tradingPost, woodlandTradingPost, moorTradingPost]) {
+    await prisma.shopItemListing.upsert({
+      where: { subLocationId_itemId: { subLocationId: post.id, itemId: trailRations.id } },
+      update: {},
+      create: { subLocationId: post.id, itemId: trailRations.id },
+    });
+  }
+
   console.log('Shop item listings seeded.');
 
   // --- Crafting recipes ---
@@ -669,7 +687,20 @@ async function main() {
         { itemName: 'Torn Cloth', quantity: 2 },
       ],
     },
-    // Woodland Forge (Lv5): pelts + rift ore.
+    // Woodland Forge (Lv5): pelts + rift ore, plus travel food from the hunt.
+    {
+      name: "Traveler's Stew",
+      description: 'Two servings of thick stew — the smith cooks it over the forge coals.',
+      goldCost: 10,
+      minLevel: 5,
+      forgeId: woodlandForge.id,
+      resultItemName: "Traveler's Stew",
+      resultQuantity: 2,
+      ingredients: [
+        { itemName: 'Emberleaf Herb', quantity: 2 },
+        { itemName: 'Wolf Meat', quantity: 1 },
+      ],
+    },
     {
       name: 'Wolfhide Vest',
       description: 'Four pelts, cut and layered against the cold and worse.',

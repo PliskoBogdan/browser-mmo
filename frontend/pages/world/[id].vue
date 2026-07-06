@@ -136,6 +136,8 @@ async function handleArrival(subLocation: SubLocationCell) {
   } else if (subLocation.kind === 'FORGE') {
     forgeSubLocation.value = subLocation;
     forgeOpen.value = true;
+  } else if (subLocation.kind === 'SAFE') {
+    showSnackbar(`${subLocation.description ?? `You arrive at ${subLocation.name}.`} You rest here — stamina restored.`);
   } else {
     showSnackbar(subLocation.description ?? `You arrive at ${subLocation.name}.`);
   }

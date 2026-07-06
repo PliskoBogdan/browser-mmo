@@ -48,6 +48,13 @@
         @pointerleave="hoveredKey = null"
       />
 
+      <!-- Player campfire (world map): the bonfire.glb prop marks the cell
+           where the player's camp burns; resting there regenerates stamina. -->
+      <TresGroup v-if="campPos && bonfireObject" :position="vec3(worldX(campPos.x), 0, worldZ(campPos.y))">
+        <primitive :object="bonfireObject" />
+        <TresPointLight :position="vec3(0, 0.6, 0)" :intensity="1.4 * fireFlicker" color="#ff9a3d" :distance="3.5" />
+      </TresGroup>
+
       <!-- Cave walls (rift maps only): boulders fill the solid cells hugging
            the explored tiles, so corridors and rooms read as carved through
            rock. Rocks never intercept pointer events (raycast disabled). -->
@@ -145,6 +152,8 @@ const props = defineProps<{
   // Sparse maps (rifts) render only the provided tiles — missing cells are
   // solid rock, not clickable EMPTY floor.
   sparse?: boolean;
+  // World map only: the cell where the player's campfire burns (bonfire prop).
+  campPos?: { x: number; y: number } | null;
 }>();
 
 const emit = defineEmits<{ tileClick: [x: number, y: number] }>();
@@ -189,13 +198,14 @@ const bossTiles = computed(() => cells.value.filter((t) => t.kind === 'BOSS'));
 // not just the tile the boss stands on.
 const bossRoomId = computed<number | null>(() => bossTiles.value[0]?.roomId ?? null);
 
-// Low-frequency flicker (not a 60fps loop) driving the campfire scale/light
+// Low-frequency flicker (not a 60fps loop) driving fire scale/light
 // intensity — cheap enough to run continuously without fighting the
-// renderer's on-demand mode, and only ticks while a boss is actually visible.
+// renderer's on-demand mode, and only ticks while a fire (boss arena
+// campfire or the player's bonfire) is actually visible.
 const fireFlicker = ref(1);
 let fireFlickerInterval: ReturnType<typeof setInterval> | null = null;
 watch(
-  () => bossTiles.value.length > 0,
+  () => bossTiles.value.length > 0 || !!props.campPos,
   (hasBoss) => {
     if (hasBoss && !fireFlickerInterval) {
       fireFlickerInterval = setInterval(() => {
@@ -348,6 +358,32 @@ function chestObjectFor(tile: GridTile): THREE.Object3D | null {
 const chestProps = computed(() =>
   chestTiles.value.map((tile) => ({ tile, object: chestObjectFor(tile) })).filter((entry): entry is { tile: GridTile; object: THREE.Object3D } => entry.object !== null),
 );
+
+// --- Player campfire (world map) ---
+// bonfire.glb is a single static mesh in raw FBX-export units with an
+// off-center pivot; normalize it at runtime from its world bounding box so
+// it sits centered on the cell with its base on the tile surface.
+const { state: bonfireGltf } = useGLTF('/models/bonfire.glb');
+const BONFIRE_FOOTPRINT = 0.7;
+
+const bonfireObject = computed<THREE.Object3D | null>(() => {
+  const gltf = bonfireGltf.value;
+  if (!gltf) return null;
+  const clone = gltf.scene.clone(true);
+  clone.traverse((child) => {
+    if (child instanceof THREE.Mesh) child.raycast = () => {}; // clicks fall through to the tile
+  });
+  const bb = new THREE.Box3().setFromObject(clone);
+  const size = new THREE.Vector3();
+  bb.getSize(size);
+  const scale = BONFIRE_FOOTPRINT / Math.max(size.x, size.z);
+  const wrapper = new THREE.Group();
+  wrapper.add(clone);
+  clone.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+  wrapper.scale.setScalar(scale);
+  wrapper.position.y = FLOOR_TOP;
+  return wrapper;
+});
 
 // --- Cave rocks (sparse/rift maps only) ---
 // rocks.glb is a whole rock pack; we pull a hand-picked spread of boulder

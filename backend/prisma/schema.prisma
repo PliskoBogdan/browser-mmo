@@ -21,6 +21,13 @@ model User {
   hp    Int @default(100)
   maxHp Int @default(100)
 
+  // Travel resource: spent per world-map step, restored by camping, resting
+  // at SAFE tiles, food items, and a slow lazy trickle (staminaUpdatedAt is
+  // the regen anchor, same pattern as hpUpdatedAt). Max is derived from
+  // endurance at read time and never stored.
+  stamina          Int      @default(100)
+  staminaUpdatedAt DateTime @default(now())
+
   // Base character stats (progression + manual upgrades). Equipment/perk
   // bonuses are layered on top at read time — never written back here.
   strength       Int @default(5)
@@ -47,6 +54,7 @@ model User {
   inventory      InventoryItem[]
   riftRuns       RiftRun[]
   exploredTiles  UserExploredTile[]
+  camp           Camp?
 
   createdAt DateTime @default(now())
 }
@@ -228,6 +236,21 @@ model ForgeListing {
   @@unique([subLocationId, recipeId])
 }
 
+// A player's campfire on the world map — at most one per player. Stamina
+// regenerates only while its owner stands on this cell (see StaminaService);
+// placement is cooldown-gated and the camp expires after a while. Expired
+// rows are cleaned up lazily by CampService.
+model Camp {
+  userId Int  @id
+  user   User @relation(fields: [userId], references: [id])
+
+  mapX Int
+  mapY Int
+
+  placedAt  DateTime @default(now())
+  expiresAt DateTime
+}
+
 enum SubLocationKind {
   SAFE
   SHOP // sells weapons/armor (buy only)
@@ -266,6 +289,9 @@ model Item {
   // Set only for items a shop actually sells (e.g. Torch). Null means the
   // item is never purchasable — only ever found (e.g. Rusty Key, monster loot).
   buyPrice Int?
+
+  // Food: eating one consumes it and restores this much stamina. Null = not edible.
+  staminaRestore Int?
 
   drops            MonsterLoot[]
   inventory        InventoryItem[]
@@ -325,8 +351,9 @@ model Battle {
   monsterId Int
   monster   Monster @relation(fields: [monsterId], references: [id])
 
-  // Exactly one of these is set: a battle happens either on a static
-  // sub-location tile or on a rift tile.
+  // At most one of these is set: a battle happens on a static sub-location
+  // tile, on a rift tile, or — when both are null — as a wilderness ambush
+  // rolled while camping on the world map.
   subLocationId Int?
   subLocation   SubLocation? @relation(fields: [subLocationId], references: [id])
   riftTileId    Int?

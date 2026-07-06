@@ -45,6 +45,28 @@ export const GAME_CONFIG = {
     maxMonsterTicks: 1000,
   },
 
+  // Travel stamina: the cost of moving through the open world.
+  stamina: {
+    // maxStamina = base + endurance * perEndurance (finally gives endurance a job).
+    base: 100,
+    perEndurance: 4,
+    // Spent per world-map step. Movement inside locations and rifts is free.
+    worldStepCost: 10,
+    // There is NO passive regen while traveling: stamina comes back only at a
+    // camp (below), at SAFE tiles (full restore) or from food.
+    // Camping places a persistent campfire on the player's world cell; while
+    // the owner stands on it, campRegenPerCycle is restored per interval.
+    campRegenIntervalMs: 5_000,
+    campRegenPerCycle: 5,
+    // Setting up a new camp is gated by a cooldown; the fire itself burns out
+    // after campLifetimeMs (the player can leave and return until then).
+    campCooldownMs: 5 * 60 * 1000,
+    campLifetimeMs: 30 * 60 * 1000,
+    // Rolled when setting up: a wilderness monster interrupts the camp
+    // instead (no fire placed, no cooldown consumed).
+    campAmbushChance: 0.3,
+  },
+
   death: {
     // Fleeing a battle costs this fraction of max HP (never drops below 1 HP).
     fleeHpPenaltyRatio: 0.2,

@@ -6,6 +6,7 @@ import { CORE_STATS } from './stats.constants';
 import { CharacterStatsService, STATS_INCLUDE } from './character-stats.service';
 import { PERK_DEFINITIONS, PERK_BY_CODE } from './perks.config';
 import { expToNextLevel } from './leveling';
+import { StaminaService } from './stamina.service';
 import { GAME_CONFIG } from '../config/game.config';
 
 type LoadedUser = NonNullable<Awaited<ReturnType<CharacterService['loadUser']>>>;
@@ -15,6 +16,7 @@ export class CharacterService {
   constructor(
     private prisma: PrismaService,
     private stats: CharacterStatsService,
+    private staminaService: StaminaService,
   ) {}
 
   private loadUser(userId: number) {
@@ -26,7 +28,8 @@ export class CharacterService {
     if (!user) throw new NotFoundException('User not found');
 
     user = await this.applyRegen(user);
-    return this.buildView(user);
+    const stamina = await this.staminaService.getState(userId);
+    return this.buildView(user, stamina);
   }
 
   async allocateStat(userId: number, stat: CoreStat, points: number) {
@@ -150,7 +153,7 @@ export class CharacterService {
     return { ...user, hp: newHp, maxHp, hpUpdatedAt: newAnchor };
   }
 
-  private buildView(user: LoadedUser) {
+  private buildView(user: LoadedUser, stamina: { stamina: number; maxStamina: number }) {
     const profile = this.stats.computeProfile(user);
 
     const equipment = {} as Record<EquipmentSlot, ReturnType<CharacterService['equippedView']> | null>;
@@ -170,6 +173,8 @@ export class CharacterService {
       gold: user.gold,
       hp: user.hp,
       maxHp: profile.combat.maxHp,
+      stamina: stamina.stamina,
+      maxStamina: stamina.maxStamina,
       isDead: user.isDead,
       statPoints: user.statPoints,
       perkPoints: user.perkPoints,

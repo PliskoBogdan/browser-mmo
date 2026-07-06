@@ -201,6 +201,9 @@ export class BattleService {
       } else if (battle.subLocation) {
         newPosition = await this.locationService.getEntryPoint(battle.subLocation.locationId);
         lootDrops = this.rewards.rollLoot(monster.loot);
+      } else {
+        // Wilderness ambush (camping): loot rolls normally, no retreat move.
+        lootDrops = this.rewards.rollLoot(monster.loot);
       }
     }
 
@@ -386,8 +389,8 @@ export class BattleService {
           damage: battle.monster.damage,
           attackSpeed: battle.monster.attackSpeed,
         },
-        location: battle.subLocation?.location.name ?? `Rift: ${battle.riftTile?.rift.name ?? 'Unknown'}`,
-        subLocation: battle.subLocation?.name ?? battle.riftTile?.name ?? 'Unknown',
+        location: battle.subLocation?.location.name ?? (battle.riftTile ? `Rift: ${battle.riftTile.rift.name}` : 'Wilderness'),
+        subLocation: battle.subLocation?.name ?? battle.riftTile?.name ?? 'Ambushed camp',
         riftBattle: battle.riftTile !== null,
         pendingMonsterDamage,
         attackCooldownMs,
@@ -421,6 +424,32 @@ export class BattleService {
         monsterId: tile.monster.id,
         riftTileId: tile.id,
         monsterCurrentHp: tile.monster.maxHp,
+        lastMonsterAttackAt: new Date(),
+        state: state as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  // Called by CampService when a camping player rolls an ambush. Neither
+  // subLocationId nor riftTileId is set — the fight happens in the open
+  // wilderness. No weapon check: getting jumped unarmed is survivable, the
+  // player can still flee.
+  async startAmbushBattle(userId: number, monsterId: number): Promise<void> {
+    const [user, monster, existing] = await Promise.all([this.prisma.user.findUnique({ where: { id: userId }, include: STATS_INCLUDE }), this.prisma.monster.findUnique({ where: { id: monsterId } }), this.prisma.battle.findFirst({ where: { userId, status: BattleStatus.ACTIVE }, select: { id: true } })]);
+
+    if (!user) throw new NotFoundException('User not found');
+    if (!monster) throw new NotFoundException('Monster not found');
+    if (existing) return;
+
+    const profile = this.stats.computeProfile(user);
+    const ctx = this.buildEngineContext(profile, monster, user.perks);
+    const state = createInitialState(ctx);
+
+    await this.prisma.battle.create({
+      data: {
+        userId,
+        monsterId: monster.id,
+        monsterCurrentHp: monster.maxHp,
         lastMonsterAttackAt: new Date(),
         state: state as unknown as Prisma.InputJsonValue,
       },

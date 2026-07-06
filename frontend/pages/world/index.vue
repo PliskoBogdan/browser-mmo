@@ -6,6 +6,12 @@
         World Map
       </div>
       <v-spacer />
+      <v-chip size="small" color="green" variant="tonal" prepend-icon="mdi-run" class="mr-2">
+        {{ character?.stamina ?? '—' }} / {{ character?.maxStamina ?? '—' }}
+      </v-chip>
+      <v-btn variant="tonal" color="deep-orange" prepend-icon="mdi-campfire" :loading="camping" :disabled="moving || entering || campCooldownMs > 0" class="mr-2" @click="handleCamp">
+        {{ campCooldownMs > 0 ? `Camp (${formatMs(campCooldownMs)})` : 'Camp' }}
+      </v-btn>
       <v-chip size="small" color="secondary" variant="tonal">Walk to a location to enter it</v-chip>
     </div>
 
@@ -21,6 +27,7 @@
           :height="overworld.height"
           :tiles="tiles"
           :player-pos="{ x: position.x, y: position.y }"
+          :camp-pos="activeCamp ? { x: activeCamp.mapX, y: activeCamp.mapY } : null"
           @tile-click="handleTileClick"
         />
         <div v-else class="d-flex align-center justify-center fill-height">
@@ -66,6 +73,8 @@
         </v-card-actions>
       </v-card>
     </div>
+
+    <v-snackbar v-model="snackbar" timeout="3200">{{ snackbarText }}</v-snackbar>
   </div>
 </template>
 
@@ -78,15 +87,38 @@ definePageMeta({ middleware: 'auth' });
 const worldStore = useWorldStore();
 const battleStore = useBattleStore();
 const riftStore = useRiftStore();
-const { overworld, position } = storeToRefs(worldStore);
+const characterStore = useCharacterStore();
+const { overworld, position, campStatus, campReadyAt } = storeToRefs(worldStore);
+const { character } = storeToRefs(characterStore);
 
 const error = ref('');
 const entering = ref(false);
 const moving = ref(false);
+const camping = ref(false);
+const snackbar = ref(false);
+const snackbarText = ref('');
 const arrivedLocation = ref<WorldLocationNode | null>(null);
 const arrivedRift = ref<WorldRiftNode | null>(null);
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | null = null;
+let campPoll: ReturnType<typeof setInterval> | null = null;
+
+// The camp, while its fire is still burning.
+const activeCamp = computed(() => {
+  const camp = campStatus.value?.camp ?? null;
+  return camp && new Date(camp.expiresAt).getTime() > now.value ? camp : null;
+});
+
+const campCooldownMs = computed(() => Math.max(0, campReadyAt.value - now.value));
+
+const standingOnCamp = computed(() => activeCamp.value !== null && position.value.locationId === null && position.value.x === activeCamp.value.mapX && position.value.y === activeCamp.value.mapY);
+
+function formatMs(ms: number) {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
 
 const tiles = computed<GridTile[]>(() => {
   if (!overworld.value) return [];
@@ -130,12 +162,17 @@ onMounted(async () => {
     return;
   }
 
-  await worldStore.fetchWorld();
+  await Promise.all([worldStore.fetchWorld(), worldStore.fetchCamp()]);
   // Coming back to this page (e.g. from Character) with the character
   // already standing on a location/rift cell should offer to enter it right
   // away — not require stepping off and back on to re-trigger the prompt.
   checkArrivalAtCurrentPosition();
-  ticker = setInterval(() => (now.value = Date.now()), 30_000);
+  // 1s tick drives the camp-cooldown countdown (and rift expiry labels).
+  ticker = setInterval(() => (now.value = Date.now()), 1_000);
+  // While resting by the fire, poll the character so the stamina bar climbs live.
+  campPoll = setInterval(() => {
+    if (standingOnCamp.value && !camping.value && !moving.value) characterStore.fetch();
+  }, 5_000);
 });
 
 function checkArrivalAtCurrentPosition() {
@@ -151,6 +188,7 @@ function checkArrivalAtCurrentPosition() {
 
 onUnmounted(() => {
   if (ticker) clearInterval(ticker);
+  if (campPoll) clearInterval(campPoll);
 });
 
 async function handleTileClick(x: number, y: number) {
@@ -184,6 +222,26 @@ async function handleTileClick(x: number, y: number) {
     error.value = e?.data?.message ?? 'Could not move there.';
   } finally {
     moving.value = false;
+  }
+}
+
+async function handleCamp() {
+  if (camping.value) return;
+  camping.value = true;
+  error.value = '';
+  try {
+    const result = await worldStore.placeCamp();
+    if (result.ambushed) {
+      await battleStore.fetchCurrent();
+      await navigateTo('/battle');
+      return;
+    }
+    snackbarText.value = result.message;
+    snackbar.value = true;
+  } catch (e: any) {
+    error.value = e?.data?.message ?? 'Could not make camp here.';
+  } finally {
+    camping.value = false;
   }
 }
 

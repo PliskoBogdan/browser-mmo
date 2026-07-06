@@ -77,12 +77,23 @@
         <v-list v-else density="compact">
           <v-list-item v-for="entry in inventoryStore.items" :key="entry.itemId">
             <template #prepend>
-              <v-icon :color="rarityColor(entry.rarity)">mdi-cube-outline</v-icon>
+              <v-icon :color="rarityColor(entry.rarity)">{{ entry.staminaRestore !== null ? 'mdi-food-drumstick' : 'mdi-cube-outline' }}</v-icon>
             </template>
             <v-list-item-title class="text-body-2">{{ entry.name }}</v-list-item-title>
             <template #append>
               <v-chip size="x-small" variant="tonal" class="mr-1">x{{ entry.quantity }}</v-chip>
               <v-chip size="x-small" color="warning" variant="tonal">{{ entry.sellValue }}g</v-chip>
+              <v-btn
+                v-if="entry.staminaRestore !== null"
+                size="x-small"
+                color="green"
+                variant="tonal"
+                class="ml-1"
+                :disabled="busy"
+                @click="run(() => inventoryStore.use(entry.itemId))"
+              >
+                Eat +{{ entry.staminaRestore }}
+              </v-btn>
             </template>
           </v-list-item>
         </v-list>

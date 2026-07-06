@@ -12,6 +12,16 @@
         />
       </div>
       <div class="progress-bar__wrapper">
+        <span class="progress-bar__level">STA: {{ character?.stamina }} / {{ character?.maxStamina }}</span>
+        <v-progress-linear
+          :model-value="character ? (character.stamina / character.maxStamina) * 100 : 0"
+          color="green"
+          bg-color="surface"
+          height="20"
+          rounded
+        />
+      </div>
+      <div class="progress-bar__wrapper">
           <span class="progress-bar__level progress-bar__level--exp">EXP: {{ character?.exp }} / {{ character?.expToNextLevel }}</span>
           <v-progress-linear
             :model-value="

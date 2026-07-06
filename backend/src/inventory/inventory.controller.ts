@@ -23,4 +23,10 @@ export class InventoryController {
   sell(@Req() req: AuthenticatedRequest, @Param('itemId', ParseIntPipe) itemId: number, @Body() body: SellItemDto) {
     return this.inventoryService.sell(req.user.userId, itemId, body.quantity);
   }
+
+  @Post(':itemId/use')
+  @HttpCode(HttpStatus.OK)
+  use(@Req() req: AuthenticatedRequest, @Param('itemId', ParseIntPipe) itemId: number) {
+    return this.inventoryService.use(req.user.userId, itemId);
+  }
 }

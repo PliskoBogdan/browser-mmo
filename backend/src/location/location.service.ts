@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { BattleStatus, RiftRunStatus, SubLocationKind } from '../../prisma/generated/client/enums';
 import { RiftWorldService } from '../rift/rift-world.service';
+import { StaminaService } from '../character/stamina.service';
 import { GAME_CONFIG } from '../config/game.config';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class LocationService {
   constructor(
     private prisma: PrismaService,
     private riftWorld: RiftWorldService,
+    private stamina: StaminaService,
   ) {}
 
   findAll() {
@@ -96,6 +98,9 @@ export class LocationService {
     this.assertInBounds(x, y, GAME_CONFIG.world.width, GAME_CONFIG.world.height);
     this.assertAdjacent(user.posX, user.posY, x, y);
 
+    // Travel costs stamina — the spend throws before the position changes.
+    const staminaState = await this.stamina.spend(userId, GAME_CONFIG.stamina.worldStepCost, 'travel');
+
     await this.prisma.user.update({ where: { id: userId }, data: { posX: x, posY: y } });
 
     const [location, rift] = await Promise.all([
@@ -113,6 +118,7 @@ export class LocationService {
       position: { locationId: null, x, y },
       location: location ? { ...location, locked: user.level < location.minLevel } : null,
       rift: rift ? { ...rift, mapX: x, mapY: y, expiresAt: rift.expiresAt.toISOString(), locked: user.level < rift.minLevel } : null,
+      stamina: staminaState,
     };
   }
 
@@ -172,9 +178,16 @@ export class LocationService {
 
     await this.prisma.user.update({ where: { id: userId }, data: { posX: x, posY: y } });
 
+    // A SAFE tile is a place to rest: arriving at one fully restores stamina.
+    let staminaState: { stamina: number; maxStamina: number } | null = null;
+    if (subLocation?.kind === SubLocationKind.SAFE) {
+      staminaState = await this.stamina.restoreFull(userId);
+    }
+
     return {
       position: { x, y },
       subLocation: subLocation ? { id: subLocation.id, name: subLocation.name, description: subLocation.description, kind: subLocation.kind } : null,
+      stamina: staminaState,
     };
   }
 

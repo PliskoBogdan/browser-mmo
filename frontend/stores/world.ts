@@ -56,8 +56,38 @@ export interface Position {
   y: number;
 }
 
+export interface StaminaState {
+  stamina: number;
+  maxStamina: number;
+}
+
+export interface CampView {
+  mapX: number;
+  mapY: number;
+  placedAt: string;
+  expiresAt: string;
+}
+
+export interface CampStatus {
+  camp: CampView | null;
+  cooldownRemainingMs: number;
+}
+
+export interface PlaceCampResult {
+  placed: boolean;
+  ambushed: boolean;
+  message: string;
+  monsterName?: string;
+  camp: CampView | null;
+  stamina: StaminaState;
+}
+
 export const useWorldStore = defineStore('world', () => {
   const overworld = ref<OverworldMap | null>(null);
+  const campStatus = ref<CampStatus | null>(null);
+  // Wall-clock instant when a new camp can be placed (derived from the
+  // fetch-time cooldownRemainingMs so the UI can count down locally).
+  const campReadyAt = ref(0);
   const currentLocation = ref<LocationDetail | null>(null);
   const position = ref<Position>({ locationId: null, x: 1, y: 2 });
   const loading = ref(false);
@@ -101,11 +131,12 @@ export const useWorldStore = defineStore('world', () => {
 
   async function moveOnWorld(x: number, y: number) {
     const { request } = useApi();
-    const result = await request<{ position: { x: number; y: number }; location: WorldLocationNode | null; rift: WorldRiftNode | null }>('/locations/world/move', {
+    const result = await request<{ position: { x: number; y: number }; location: WorldLocationNode | null; rift: WorldRiftNode | null; stamina: StaminaState }>('/locations/world/move', {
       method: 'POST',
       body: { x, y },
     });
     position.value = { locationId: null, x: result.position.x, y: result.position.y };
+    useCharacterStore().applyStamina(result.stamina);
     return { location: result.location, rift: result.rift };
   }
 
@@ -117,12 +148,29 @@ export const useWorldStore = defineStore('world', () => {
 
   async function moveInLocation(x: number, y: number) {
     const { request } = useApi();
-    const result = await request<{ position: { x: number; y: number }; subLocation: SubLocationCell | null }>('/locations/move', {
+    const result = await request<{ position: { x: number; y: number }; subLocation: SubLocationCell | null; stamina: StaminaState | null }>('/locations/move', {
       method: 'POST',
       body: { x, y },
     });
     position.value = { ...position.value, x: result.position.x, y: result.position.y };
+    useCharacterStore().applyStamina(result.stamina);
     return result.subLocation;
+  }
+
+  async function fetchCamp() {
+    const { request } = useApi();
+    campStatus.value = await request<CampStatus>('/camp');
+    campReadyAt.value = Date.now() + campStatus.value.cooldownRemainingMs;
+  }
+
+  // Place a campfire on the current world cell. Either the fire is set (the
+  // cell becomes the player's camp) or a wilderness ambush interrupts the
+  // setup (the caller should route to /battle then).
+  async function placeCamp() {
+    const { request } = useApi();
+    const result = await request<PlaceCampResult>('/camp', { method: 'POST' });
+    if (result.placed) await fetchCamp();
+    return result;
   }
 
   async function leaveLocation() {
@@ -134,6 +182,8 @@ export const useWorldStore = defineStore('world', () => {
 
   function clear() {
     overworld.value = null;
+    campStatus.value = null;
+    campReadyAt.value = 0;
     currentLocation.value = null;
     position.value = { locationId: null, x: 1, y: 2 };
     hydrated.value = false;
@@ -151,6 +201,10 @@ export const useWorldStore = defineStore('world', () => {
     moveOnWorld,
     enterLocation,
     moveInLocation,
+    campStatus,
+    campReadyAt,
+    fetchCamp,
+    placeCamp,
     leaveLocation,
     clear,
   };

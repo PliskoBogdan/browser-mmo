@@ -1,0 +1,13 @@
+-- CreateTable
+CREATE TABLE "Camp" (
+    "userId" INTEGER NOT NULL,
+    "mapX" INTEGER NOT NULL,
+    "mapY" INTEGER NOT NULL,
+    "placedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Camp_pkey" PRIMARY KEY ("userId")
+);
+
+-- AddForeignKey
+ALTER TABLE "Camp" ADD CONSTRAINT "Camp_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

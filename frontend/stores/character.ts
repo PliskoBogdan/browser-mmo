@@ -11,6 +11,7 @@ export interface StatBreakdown {
 
 export interface CombatProfile {
   maxHp: number;
+  maxStamina: number;
   healthRegenPerCycle: number;
   evasionChance: number;
   critChance: number;
@@ -58,6 +59,8 @@ export interface Character {
   gold: number;
   hp: number;
   maxHp: number;
+  stamina: number;
+  maxStamina: number;
   isDead: boolean;
   statPoints: number;
   perkPoints: number;
@@ -127,11 +130,19 @@ export const useCharacterStore = defineStore('character', () => {
     await fetch();
   }
 
+  // Endpoints that spend/restore stamina return the fresh state — patch it
+  // into the cached character instead of refetching the whole profile.
+  function applyStamina(state: { stamina: number; maxStamina: number } | null | undefined) {
+    if (!state || !character.value) return;
+    character.value.stamina = state.stamina;
+    character.value.maxStamina = state.maxStamina;
+  }
+
   function clear() {
     character.value = null;
     gear.value = [];
     perks.value = [];
   }
 
-  return { character, gear, perks, loading, fetch, fetchGear, fetchPerks, allocateStat, unlockPerk, equip, unequip, resurrect, clear };
+  return { character, gear, perks, loading, fetch, fetchGear, fetchPerks, allocateStat, unlockPerk, equip, unequip, resurrect, applyStamina, clear };
 });

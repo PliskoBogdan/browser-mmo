@@ -13,9 +13,10 @@ import { EquipmentModule } from './equipment/equipment.module';
 import { ShopModule } from './shop/shop.module';
 import { RiftModule } from './rift/rift.module';
 import { CraftingModule } from './crafting/crafting.module';
+import { CampModule } from './camp/camp.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule, InventoryModule, EquipmentModule, ShopModule, RiftModule, CraftingModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, UsersModule, LocationModule, BattleModule, CharacterModule, InventoryModule, EquipmentModule, ShopModule, RiftModule, CraftingModule, CampModule],
   controllers: [AppController],
   providers: [AppService],
 })

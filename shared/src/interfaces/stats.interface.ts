@@ -26,6 +26,7 @@ export type ItemRarity = 'COMMON' | 'UNCOMMON' | 'RARE';
 // Derived combat numbers computed from final stats + equipped weapon.
 export interface CombatProfile {
   maxHp: number;
+  maxStamina: number;
   healthRegenPerCycle: number;
   evasionChance: number; // 0..0.6
   critChance: number; // 0..0.75

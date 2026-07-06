@@ -112,12 +112,15 @@ export class CharacterStatsService {
 
     const maxHp = cfg.baseMaxHp + strength * cfg.strengthHpMult;
     const healthRegenPerCycle = strength * cfg.strengthRegenMult * (1 + regenBonus);
+    const endurance = Math.max(0, final.endurance);
+    const maxStamina = GAME_CONFIG.stamina.base + endurance * GAME_CONFIG.stamina.perEndurance;
 
     const attackSpeed = weapon?.attackSpeed ?? null;
     const attackDamage = weapon ? weapon.baseDamage + Math.floor(strength * cfg.strengthDamageMult) : 0;
 
     return {
       maxHp,
+      maxStamina,
       healthRegenPerCycle,
       evasionChance: Math.min(cfg.maxEvasion, agility / (agility + 100)),
       critChance: Math.min(cfg.maxCritChance, accuracy / (accuracy + 100)),

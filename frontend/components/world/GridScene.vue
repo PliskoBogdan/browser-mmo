@@ -48,6 +48,13 @@
         @pointerleave="hoveredKey = null"
       />
 
+      <!-- Cave walls (rift maps only): boulders fill the solid cells hugging
+           the explored tiles, so corridors and rooms read as carved through
+           rock. Rocks never intercept pointer events (raycast disabled). -->
+      <TresGroup v-for="rock in rockProps" :key="`rock-${rock.key}`">
+        <primitive :object="rock.object" />
+      </TresGroup>
+
       <!-- Chest prop: a basicchest.glb model with a skinned lid bone that
            swings open once emptied. -->
       <TresGroup
@@ -341,6 +348,126 @@ function chestObjectFor(tile: GridTile): THREE.Object3D | null {
 const chestProps = computed(() =>
   chestTiles.value.map((tile) => ({ tile, object: chestObjectFor(tile) })).filter((entry): entry is { tile: GridTile; object: THREE.Object3D } => entry.object !== null),
 );
+
+// --- Cave rocks (sparse/rift maps only) ---
+// rocks.glb is a whole rock pack; we pull a hand-picked spread of boulder
+// meshes out of it and scatter them over every solid cell that touches an
+// explored tile. Fog cells are real (unexplored) tiles, so the rock ring
+// naturally stops at the exploration frontier.
+const { state: rocksGltf } = useGLTF('/models/rocks.glb');
+
+// Underscore-only names survive GLTFLoader's node-name sanitization.
+const ROCK_VARIANT_NAMES = ['rock_md_01_Rocks_0', 'rock_md_02_Rocks_0', 'rock_md_03_Rocks_0', 'rock_md_04_Rocks_0', 'rock_md_05_Rocks_0', 'rock_sm2_01_Rocks_0', 'rock_sm2_03_Rocks_0', 'rock_sm2_04_Rocks_0'];
+
+// One shared material for every rock, darkened so the walls recede behind
+// the lit floor tiles instead of competing with them.
+let rockMaterial: THREE.MeshStandardMaterial | null = null;
+
+interface RockTemplate {
+  geometry: THREE.BufferGeometry;
+  center: THREE.Vector3; // horizontal bbox center, in raw geometry units
+  bottom: number; // bbox min y, in raw geometry units
+  footprint: number; // max horizontal bbox extent, in raw geometry units
+}
+
+const rockTemplates = computed<RockTemplate[]>(() => {
+  const gltf = rocksGltf.value;
+  if (!gltf) return [];
+  const templates: RockTemplate[] = [];
+  for (const name of ROCK_VARIANT_NAMES) {
+    const mesh = gltf.scene.getObjectByName(name);
+    if (!(mesh instanceof THREE.Mesh)) continue;
+    if (!rockMaterial) {
+      rockMaterial = (mesh.material as THREE.MeshStandardMaterial).clone();
+      rockMaterial.color.multiplyScalar(0.72);
+      rockMaterial.roughness = 0.95;
+    }
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    geometry.computeBoundingBox();
+    const bb = geometry.boundingBox!;
+    templates.push({
+      geometry,
+      center: new THREE.Vector3((bb.min.x + bb.max.x) / 2, 0, (bb.min.z + bb.max.z) / 2),
+      bottom: bb.min.y,
+      footprint: Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z),
+    });
+  }
+  return templates;
+});
+
+// Every empty 8-neighbour of a rendered tile is solid rock. Cells just
+// outside the grid bounds are included on purpose — they frame the map edge.
+const rockCells = computed<{ x: number; y: number }[]>(() => {
+  if (!props.sparse) return [];
+  const occupied = new Set(props.tiles.map((t) => cellKey(t.x, t.y)));
+  const seen = new Set<string>();
+  const cells: { x: number; y: number }[] = [];
+  for (const t of props.tiles) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const x = t.x + dx;
+        const y = t.y + dy;
+        const key = cellKey(x, y);
+        if (occupied.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        cells.push({ x, y });
+      }
+    }
+  }
+  return cells;
+});
+
+// Deterministic per-cell randomness (variant, rotation, scale) so the same
+// cell always grows the same rock across re-renders and revisits.
+function rockRand(x: number, y: number, salt: number): number {
+  const s = Math.sin(x * 127.1 + y * 311.7 + salt * 74.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function buildRockObject(x: number, y: number, templates: RockTemplate[]): THREE.Object3D {
+  const group = new THREE.Group();
+  // Every rock cell gets one boulder sized to slightly overlap its
+  // neighbours (a continuous wall); ~1 in 4 also gets a small companion.
+  const count = rockRand(x, y, 9) > 0.75 ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    const template = templates[Math.floor(rockRand(x, y, 1 + i * 3) * templates.length)];
+    const footprint = i === 0 ? 1.0 + rockRand(x, y, 2) * 0.25 : 0.3 + rockRand(x, y, 5) * 0.2;
+    const scale = footprint / template.footprint;
+
+    const mesh = new THREE.Mesh(template.geometry, rockMaterial!);
+    mesh.raycast = () => {}; // never intercept tile clicks/hovers
+    // Offset so the boulder spins around its own center and sits on the floor.
+    mesh.position.set(-template.center.x, -template.bottom, -template.center.z);
+
+    const wrapper = new THREE.Group();
+    wrapper.add(mesh);
+    wrapper.scale.setScalar(scale);
+    wrapper.rotation.y = rockRand(x, y, 3 + i) * Math.PI * 2;
+    const jitter = i === 0 ? 0 : 0.5;
+    wrapper.position.set(worldX(x) + (rockRand(x, y, 6 + i) - 0.5) * jitter, -0.05, worldZ(y) + (rockRand(x, y, 7 + i) - 0.5) * jitter);
+    group.add(wrapper);
+  }
+  return group;
+}
+
+// Cached per cell — solid cells never change once revealed, so re-renders on
+// every player move reuse the built group instead of re-cloning meshes.
+const rockObjectCache = new Map<string, THREE.Object3D>();
+
+const rockProps = computed(() => {
+  const templates = rockTemplates.value;
+  if (!templates.length) return [];
+  return rockCells.value.map(({ x, y }) => {
+    const key = cellKey(x, y);
+    let object = rockObjectCache.get(key);
+    if (!object) {
+      object = buildRockObject(x, y, templates);
+      rockObjectCache.set(key, object);
+    }
+    return { key, object };
+  });
+});
 
 // Boss marker: a small campfire cluster (outer + two inner flame cones),
 // scaled by fireFlicker for a flame-like animation, lighting the arena via
